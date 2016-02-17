@@ -27,6 +27,14 @@ native bool CSGOItems_IsSkinnableDefIndex(int iDefIndex);
 native int CSGOItems_FindWeaponIndexByClassName(int iClient, const char[] chClassName);
 native int CSGOItems_GetActiveWeaponNum(int iClient);
 native bool CSGOItems_GetWeaponSlotByWeaponNum(int iWeaponNum, char[] chBuffer, int iLengh);
+native int CSGOItems_GetWeaponTeamByDefIndex(int iDefIndex);
+native int CSGOItems_GetWeaponTeamByClassName(const char[] chClassName);
+native int CSGOItems_GetWeaponTeamByWeaponNum(int iWeaponNum);
+native int CSGOItems_GetWeaponClipAmmoByDefIndex(int iDefIndex);
+native int CSGOItems_GetWeaponClipAmmoByClassName(const char[] chClassName);
+native int CSGOItems_GetWeaponClipAmmoByWeaponNum(int iWeaponNum);
+native bool CSGOItems_RefillClipAmmo(int iWeapon);
+native bool CSGOItems_IsValidWeapon(int iWeapon);
 
 // SKINS
 native int CSGOItems_GetSkinNumByDefIndex(int iDefIndex);

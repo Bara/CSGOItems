@@ -7,6 +7,11 @@
 CHANGELOG
 ****************************************************************************************************
 	0.1 ~ Many changes which I did not even log..
+	0.2 ~ 
+		- Added the ability to get weapon team(s).
+		- Added ability to get weapon clip size.
+		- Added ability to refill weapon clip size.
+		- Added ability to check if a weapon edict is valid.
 		
 
 ****************************************************************************************************
@@ -21,12 +26,14 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "0.1"
+#define VERSION "0.2"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
 #define 	DISPLAYNAME 	2
 #define 	SLOT 			3
+#define 	TEAM 			4
+#define 	AMMO 			5
 
 /****************************************************************************************************
 ETIQUETTE.
@@ -62,7 +69,7 @@ bool g_bIsDefIndexSkinnable[600];
 /****************************************************************************************************
 STRINGS.
 *****************************************************************************************************/
-char g_chWeaponInfo[100][5][24];
+char g_chWeaponInfo[100][7][24];
 char g_chPaintInfo[600][3][24];
 char g_chMusicKitInfo[100][3][128];
 char g_chLangPhrases[2198296];
@@ -92,7 +99,7 @@ public void OnPluginStart()
 	//g_hOnSkinSynced = CreateGlobalForward("CSGOItems_OnSkinSynced", ET_Ignore, Param_Cell, Param_Cell, Param_String);
 	//g_hOnMusicKitSynced = CreateGlobalForward("CSGOItems_OnMusicKitSynced", ET_Ignore, Param_Cell, Param_Cell, Param_String);
 	
-	ReadItemsFile(); ReadItemsFile(); ReadLanguageFile(); SyncItemData();
+	ReadItemsFile(); ReadLanguageFile(); SyncItemData();
 }
 
 public APLRes AskPluginLoad2(Handle hNyself, bool bLate, char[] chError, int iErrMax)
@@ -125,6 +132,17 @@ public APLRes AskPluginLoad2(Handle hNyself, bool bLate, char[] chError, int iEr
 	CreateNative("CSGOItems_GetWeaponDisplayNameByClassName", Native_GetWeaponDisplayNameByClassName);
 	CreateNative("CSGOItems_GetWeaponDisplayNameByWeaponNum", Native_GetWeaponDisplayNameByWeaponNum);
 	
+	// Weapon Teams
+	CreateNative("CSGOItems_GetWeaponTeamByDefIndex", Native_GetWeaponTeamByDefIndex);
+	CreateNative("CSGOItems_GetWeaponTeamByClassName", Native_GetWeaponTeamByClassName);
+	CreateNative("CSGOItems_GetWeaponTeamByWeaponNum", Native_GetWeaponTeamByWeaponNum);
+	
+	// Weapon Ammo
+	CreateNative("CSGOItems_GetWeaponClipAmmoByDefIndex", Native_GetWeaponClipAmmoByDefIndex);
+	CreateNative("CSGOItems_GetWeaponClipAmmoByClassName", Native_GetWeaponClipAmmoByClassName);
+	CreateNative("CSGOItems_GetWeaponClipAmmoByWeaponNum", Native_GetWeaponClipAmmoByWeaponNum);
+	CreateNative("CSGOItems_RefillClipAmmo", Native_RefillClipAmmo);
+	
 	// Misc
 	CreateNative("CSGOItems_IsDefIndexKnife", Native_IsDefIndexKnife);
 	CreateNative("CSGOItems_GetWeaponDefIndexByWeaponIndex", Native_GetWeaponDefIndexByWeaponIndex);
@@ -136,6 +154,7 @@ public APLRes AskPluginLoad2(Handle hNyself, bool bLate, char[] chError, int iEr
 	CreateNative("CSGOItems_GetActiveWeaponNum", Native_GetActiveWeaponNum);
 	CreateNative("CSGOItems_GetActiveWeaponIndex", Native_GetActiveWeaponIndex);
 	CreateNative("CSGOItems_FindWeaponIndexByClassName", Native_FindWeaponIndexByClassName);
+	CreateNative("CSGOItems_IsValidWeapon", Native_IsValidWeapon);
 	
 	/****************************************************************************************************
 											--SKIN NATIVES--
@@ -207,6 +226,11 @@ public void SyncItemData()
 			
 			KvGetSectionName(g_hItemsKv, g_chWeaponInfo[g_iWeaponCount][DEFINDEX], 64);
 			strcopy(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], 64, chBuffer);
+			
+			if(StrEqual(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], "weapon_c4", false)) {
+				g_chWeaponInfo[g_iWeaponCount][TEAM] = "2";
+			}
+			
 			KvGetString(g_hItemsKv, "prefab", chBuffer, 64);
 			
 			if (StrContains(chBuffer, "melee") != -1) {
@@ -226,8 +250,30 @@ public void SyncItemData()
 				KvJumpToKey(g_hItemsKv, "prefabs");
 				KvJumpToKey(g_hItemsKv, chBuffer);
 				KvGetString(g_hItemsKv, "item_name", chBuffer, 64);
+				KvJumpToKey(g_hItemsKv, "used_by_classes");
 				
-				KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv);
+				bool bTerrorist = KvGetNum(g_hItemsKv, "terrorists") == 1;
+				bool bCounterTerrorist = KvGetNum(g_hItemsKv, "counter-terrorists") == 1;
+				bool bBothTeams = bTerrorist && bCounterTerrorist;
+				
+				if(bBothTeams) {
+					g_chWeaponInfo[g_iWeaponCount][TEAM] = "0";
+				}
+				
+				else if(bTerrorist) {
+					g_chWeaponInfo[g_iWeaponCount][TEAM] = "2";
+				}
+				
+				else if(bCounterTerrorist) {
+					g_chWeaponInfo[g_iWeaponCount][TEAM] = "3";
+				}
+				
+				KvGoBack(g_hItemsKv); 
+				
+				KvJumpToKey(g_hItemsKv, "attributes");
+				IntToString(KvGetNum(g_hItemsKv, "primary reserve ammo max"), g_chWeaponInfo[g_iWeaponCount][AMMO], 64);
+				
+				KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv);
 				
 				KvJumpToKey(g_hItemsKv, "items");
 				KvJumpToKey(g_hItemsKv, g_chWeaponInfo[g_iWeaponCount][DEFINDEX]);
@@ -344,6 +390,102 @@ public int Native_GetWeaponNumByDefIndex(Handle hPlugin, int iNumParams)
 	}
 	
 	return -1;
+}
+
+public int Native_GetWeaponTeamByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_chWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return StringToInt(g_chWeaponInfo[iWeaponNum][TEAM]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponTeamByClassName(Handle hPlugin, int iNumParams)
+{
+	char chClassName[64]; GetNativeString(1, chClassName, sizeof(chClassName));
+	
+	if (!IsValidWeaponClassName(chClassName)) {
+		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
+		return -1;
+	}
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
+			return StringToInt(g_chWeaponInfo[iWeaponNum][TEAM]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponTeamByWeaponNum(Handle hPlugin, int iNumParams)
+{
+	int iWeaponNum = GetNativeCell(1);
+	
+	return StringToInt(g_chWeaponInfo[iWeaponNum][TEAM]);
+}
+
+public int Native_GetWeaponClipAmmoByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_chWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return StringToInt(g_chWeaponInfo[iWeaponNum][AMMO]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponClipAmmoByClassName(Handle hPlugin, int iNumParams)
+{
+	char chClassName[64]; GetNativeString(1, chClassName, sizeof(chClassName));
+	
+	if (!IsValidWeaponClassName(chClassName)) {
+		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
+		return -1;
+	}
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
+			return StringToInt(g_chWeaponInfo[iWeaponNum][AMMO]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponClipAmmoByWeaponNum(Handle hPlugin, int iNumParams)
+{
+	int iWeaponNum = GetNativeCell(1);
+	
+	return StringToInt(g_chWeaponInfo[iWeaponNum][AMMO]);
+}
+
+public int Native_RefillClipAmmo(Handle hPlugin, int iNumParams)
+{
+	int iWeapon = GetNativeCell(1);
+	
+	if(!CSGOItems_IsValidWeapon(iWeapon)) {
+		ThrowNativeError(SP_ERROR_INDEX, "Edict %d is an invalid weapon.", iWeapon);
+	}
+	
+	int iDefIndex = CSGOItems_GetWeaponDefIndexByWeaponIndex(iWeapon);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_chWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			SetEntProp(iWeapon, Prop_Send, "m_iClip1", StringToInt(g_chWeaponInfo[iWeaponNum][AMMO]));
+			return true;
+		}
+	}
+	
+	return false;
 }
 
 public int Native_GetWeaponNumByClassName(Handle hPlugin, int iNumParams)
@@ -635,3 +777,16 @@ public int Native_GetClassNameByWeaponIndex(Handle hPlugin, int iNumParams)
 	SetNativeString(2, chWeaponClassName, GetNativeCell(3));
 	return true;
 } 
+
+public int Native_IsValidWeapon(Handle hPlugin, int iNumParams)
+{
+	int iWeapon = GetNativeCell(1);
+	
+	if (!IsValidEdict(iWeapon) || !IsValidEntity(iWeapon) || iWeapon == -1) {
+		return false;
+	}
+	
+	char chWeapon[64]; GetEdictClassname(iWeapon, chWeapon, sizeof(chWeapon));
+	
+	return IsValidWeaponClassName(chWeapon);
+}
