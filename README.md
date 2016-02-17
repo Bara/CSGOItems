@@ -1,0 +1,1 @@
+CSGO Items is an API designed to provide extended information and functionality to the CSGO Item Economy, it's currently purely sourcepawn only.
