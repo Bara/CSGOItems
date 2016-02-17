@@ -814,7 +814,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		return -1;
 	}
 	
-	if(iClientTeam != iWeaponTeam && iWeaponTeam > 0) {
+	if(iClientTeam != iWeaponTeam && iWeaponTeam > 1) {
 		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iWeaponTeam);  
 	}
 	
@@ -825,7 +825,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		EquipPlayerWeapon(iClient, iWeapon);
 	}
 	
-	if(iWeaponTeam > 0 && iClientTeam == iWeaponTeam) {
+	if(iWeaponTeam > 1 && GetClientTeam(iClient) == iWeaponTeam) {
 		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iClientTeam);
 	}
 	
