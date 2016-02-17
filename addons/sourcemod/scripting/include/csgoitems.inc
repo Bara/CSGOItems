@@ -1,8 +1,8 @@
 #if defined _csgoitems_included_
-  #endinput
+#endinput
 #endif
 #define _csgoitems_included_
- 
+
 native int CSGOItems_GetWeaponCount();
 native int CSGOItems_GetMusicKitCount();
 native int CSGOItems_GetSkinCount();
@@ -47,4 +47,4 @@ native bool CSGOItems_GetSkinDisplayNameBySkinNum(int iSkinNum, char[] chBuffer,
 native int CSGOItems_GetMusicKitNumByDefIndex(int iDefIndex);
 native int CSGOItems_GetMusicKitDefIndexByMusicKitNum(int iMusicKitNum);
 native bool CSGOItems_GetMusicKitDisplayNameByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
-native bool CSGOItems_GetMusicKitDisplayNameByMusicKitNum(int iMusicKitNum, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetMusicKitDisplayNameByMusicKitNum(int iMusicKitNum, char[] chBuffer, int iLengh); 

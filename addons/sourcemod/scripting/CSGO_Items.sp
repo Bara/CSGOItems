@@ -234,7 +234,7 @@ public void SyncItemData()
 			KvGetSectionName(g_hItemsKv, g_chWeaponInfo[g_iWeaponCount][DEFINDEX], 64);
 			strcopy(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], 64, chBuffer);
 			
-			if(StrEqual(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], "weapon_c4", false)) {
+			if (StrEqual(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], "weapon_c4", false)) {
 				g_chWeaponInfo[g_iWeaponCount][TEAM] = "2";
 			}
 			
@@ -263,19 +263,19 @@ public void SyncItemData()
 				bool bCounterTerrorist = KvGetNum(g_hItemsKv, "counter-terrorists") == 1;
 				bool bBothTeams = bTerrorist && bCounterTerrorist;
 				
-				if(bBothTeams) {
+				if (bBothTeams) {
 					g_chWeaponInfo[g_iWeaponCount][TEAM] = "0";
 				}
 				
-				else if(bTerrorist) {
+				else if (bTerrorist) {
 					g_chWeaponInfo[g_iWeaponCount][TEAM] = "2";
 				}
 				
-				else if(bCounterTerrorist) {
+				else if (bCounterTerrorist) {
 					g_chWeaponInfo[g_iWeaponCount][TEAM] = "3";
 				}
 				
-				KvGoBack(g_hItemsKv); 
+				KvGoBack(g_hItemsKv);
 				
 				KvJumpToKey(g_hItemsKv, "attributes");
 				IntToString(KvGetNum(g_hItemsKv, "primary reserve ammo max"), g_chWeaponInfo[g_iWeaponCount][AMMO], 64);
@@ -479,7 +479,7 @@ public int Native_RefillClipAmmo(Handle hPlugin, int iNumParams)
 {
 	int iWeapon = GetNativeCell(1);
 	
-	if(!CSGOItems_IsValidWeapon(iWeapon)) {
+	if (!CSGOItems_IsValidWeapon(iWeapon)) {
 		ThrowNativeError(SP_ERROR_INDEX, "Edict %d is an invalid weapon.", iWeapon);
 	}
 	
@@ -783,7 +783,7 @@ public int Native_GetClassNameByWeaponIndex(Handle hPlugin, int iNumParams)
 	char chWeaponClassName[64]; CSGOItems_GetWeaponClassNameByDefIndex(iWeaponDefIndex, chWeaponClassName, 64);
 	SetNativeString(2, chWeaponClassName, GetNativeCell(3));
 	return true;
-} 
+}
 
 public int Native_IsValidWeapon(Handle hPlugin, int iNumParams)
 {
@@ -803,31 +803,31 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	int iClient = GetNativeCell(1);
 	char chClassName[64]; GetNativeString(2, chClassName, sizeof(chClassName));
 	
-	if(!IsValidWeaponClassName(chClassName)) {
+	if (!IsValidWeaponClassName(chClassName)) {
 		return -1;
 	}
 	
 	int iWeaponTeam = CSGOItems_GetWeaponTeamByClassName(chClassName);
 	int iClientTeam = GetClientTeam(iClient);
 	
-	if(iClientTeam < 2 || !IsPlayerAlive(iClient) ) {
+	if (iClientTeam < 2 || !IsPlayerAlive(iClient)) {
 		return -1;
 	}
 	
-	if(iClientTeam != iWeaponTeam && iWeaponTeam > 1) {
-		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iWeaponTeam);  
+	if (iClientTeam != iWeaponTeam && iWeaponTeam > 1) {
+		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iWeaponTeam);
 	}
 	
 	int iWeapon = GivePlayerItem(iClient, chClassName);
 	int iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByWeaponIndex(iWeapon);
 	
-	if(CSGOItems_IsDefIndexKnife(iWeaponDefIndex)) {
+	if (CSGOItems_IsDefIndexKnife(iWeaponDefIndex)) {
 		EquipPlayerWeapon(iClient, iWeapon);
 	}
 	
-	if(iWeaponTeam > 1 && GetClientTeam(iClient) == iWeaponTeam) {
+	if (iWeaponTeam > 1 && GetClientTeam(iClient) == iWeaponTeam) {
 		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iClientTeam);
 	}
 	
 	return iWeapon;
-}
+} 
