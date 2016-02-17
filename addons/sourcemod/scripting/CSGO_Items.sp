@@ -12,7 +12,13 @@ CHANGELOG
 		- Added ability to get weapon clip size.
 		- Added ability to refill weapon clip size.
 		- Added ability to check if a weapon edict is valid.
-		
+	0.3 ~ 
+		- Added CSGOItems_GiveWeapon
+							This function is a replacement for GivePlayerItem, it fixes players not getting loadout skins when the weapon team is the opposite of the player.
+							This function also automatically equips knives, so you don't need to use EquipPlayerWeapon.
+							Example: CSGOItems_GiveWeapon(iClient, "weapon_ak47"); Player team = CT.
+							Outcome: Player will recieve an AK47 with his loadout skin.
+							Return: Weapon edict index or -1 if failed.
 
 ****************************************************************************************************
 INCLUDES
@@ -26,7 +32,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "0.2"
+#define VERSION "0.3"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -155,6 +161,7 @@ public APLRes AskPluginLoad2(Handle hNyself, bool bLate, char[] chError, int iEr
 	CreateNative("CSGOItems_GetActiveWeaponIndex", Native_GetActiveWeaponIndex);
 	CreateNative("CSGOItems_FindWeaponIndexByClassName", Native_FindWeaponIndexByClassName);
 	CreateNative("CSGOItems_IsValidWeapon", Native_IsValidWeapon);
+	CreateNative("CSGOItems_GiveWeapon", Native_GiveWeapon);
 	
 	/****************************************************************************************************
 											--SKIN NATIVES--
@@ -789,4 +796,38 @@ public int Native_IsValidWeapon(Handle hPlugin, int iNumParams)
 	char chWeapon[64]; GetEdictClassname(iWeapon, chWeapon, sizeof(chWeapon));
 	
 	return IsValidWeaponClassName(chWeapon);
+}
+
+public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
+{
+	int iClient = GetNativeCell(1);
+	char chClassName[64]; GetNativeString(2, chClassName, sizeof(chClassName));
+	
+	if(!IsValidWeaponClassName(chClassName)) {
+		return -1;
+	}
+	
+	int iWeaponTeam = CSGOItems_GetWeaponTeamByClassName(chClassName);
+	int iClientTeam = GetClientTeam(iClient);
+	
+	if(iClientTeam < 2 || !IsPlayerAlive(iClient) ) {
+		return -1;
+	}
+	
+	if(iClientTeam != iWeaponTeam && iWeaponTeam > 0) {
+		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iWeaponTeam);  
+	}
+	
+	int iWeapon = GivePlayerItem(iClient, chClassName);
+	int iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByWeaponIndex(iWeapon);
+	
+	if(CSGOItems_IsDefIndexKnife(iWeaponDefIndex)) {
+		EquipPlayerWeapon(iClient, iWeapon);
+	}
+	
+	if(iWeaponTeam > 0 && iClientTeam == iWeaponTeam) {
+		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iClientTeam);
+	}
+	
+	return iWeapon;
 }
