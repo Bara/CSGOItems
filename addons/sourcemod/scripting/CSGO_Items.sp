@@ -4,7 +4,6 @@
 Credits: 
 		NeuroToxin:
 					I have learnt a lot from a lot from your previous work and that has helped create this.
-/*
 ****************************************************************************************************
 CHANGELOG
 ****************************************************************************************************
@@ -77,8 +76,8 @@ bool g_bIsDefIndexSkinnable[600];
 /****************************************************************************************************
 STRINGS.
 *****************************************************************************************************/
-char g_chWeaponInfo[100][7][24];
-char g_chPaintInfo[600][3][24];
+char g_chWeaponInfo[100][7][128];
+char g_chPaintInfo[600][3][128];
 char g_chMusicKitInfo[100][3][128];
 char g_chLangPhrases[2198296];
 
@@ -228,19 +227,20 @@ public void SyncItemData()
 	char chBuffer[128]; char chBuffer2[128];
 	
 	do {
-		KvGetString(g_hItemsKv, "name", chBuffer, 64);
+		KvGetString(g_hItemsKv, "name", chBuffer, 128);
 		
 		if (IsValidWeaponClassName(chBuffer)) {
 			g_iWeaponCount++;
 			
-			KvGetSectionName(g_hItemsKv, g_chWeaponInfo[g_iWeaponCount][DEFINDEX], 64);
-			strcopy(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], 64, chBuffer);
+			KvGetSectionName(g_hItemsKv, g_chWeaponInfo[g_iWeaponCount][DEFINDEX], 128);
+			
+			strcopy(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], 128, chBuffer);
 			
 			if (StrEqual(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], "weapon_c4", false)) {
 				g_chWeaponInfo[g_iWeaponCount][TEAM] = "2";
 			}
 			
-			KvGetString(g_hItemsKv, "prefab", chBuffer, 64);
+			KvGetString(g_hItemsKv, "prefab", chBuffer, 128);
 			
 			if (StrContains(chBuffer, "melee") != -1) {
 				g_bIsDefIndexKnife[StringToInt(g_chWeaponInfo[g_iWeaponCount][DEFINDEX])] = true;
@@ -252,13 +252,13 @@ public void SyncItemData()
 			}
 			
 			if (IsSpecialPrefab(chBuffer)) {
-				KvGetString(g_hItemsKv, "item_name", chBuffer, 64);
+				KvGetString(g_hItemsKv, "item_name", chBuffer, 128);
 			} else {
 				KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv);
 				
 				KvJumpToKey(g_hItemsKv, "prefabs");
 				KvJumpToKey(g_hItemsKv, chBuffer);
-				KvGetString(g_hItemsKv, "item_name", chBuffer, 64);
+				KvGetString(g_hItemsKv, "item_name", chBuffer, 128);
 				KvJumpToKey(g_hItemsKv, "used_by_classes");
 				
 				bool bTerrorist = KvGetNum(g_hItemsKv, "terrorists") == 1;
@@ -280,22 +280,22 @@ public void SyncItemData()
 				KvGoBack(g_hItemsKv);
 				
 				KvJumpToKey(g_hItemsKv, "attributes");
-				IntToString(KvGetNum(g_hItemsKv, "primary reserve ammo max"), g_chWeaponInfo[g_iWeaponCount][AMMO], 64);
+				IntToString(KvGetNum(g_hItemsKv, "primary reserve ammo max"), g_chWeaponInfo[g_iWeaponCount][AMMO], 128);
 				
 				KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv);
 				
 				KvJumpToKey(g_hItemsKv, "items");
 				KvJumpToKey(g_hItemsKv, g_chWeaponInfo[g_iWeaponCount][DEFINDEX]);
 			}
-			GetItemName(chBuffer, g_chWeaponInfo[g_iWeaponCount][DISPLAYNAME], 64);
-			KvGetString(g_hItemsKv, "item_sub_position", chBuffer, 64);
+			GetItemName(chBuffer, g_chWeaponInfo[g_iWeaponCount][DISPLAYNAME], 128);
+			KvGetString(g_hItemsKv, "item_sub_position", chBuffer, 128);
 			
 			if (StrContains(chBuffer, "grenade") == -1 && StrContains(chBuffer, "equipment") == -1 && !StrEqual(chBuffer, "", false) && StrContains(chBuffer, "melee") == -1) {
 				g_bIsDefIndexSkinnable[StringToInt(g_chWeaponInfo[g_iWeaponCount][DEFINDEX])] = true;
 			}
 			
 			if (!StrEqual(chBuffer, "", false)) {
-				strcopy(g_chWeaponInfo[g_iWeaponCount][SLOT], 64, chBuffer);
+				strcopy(g_chWeaponInfo[g_iWeaponCount][SLOT], 128, chBuffer);
 			}
 		}
 	}
@@ -310,13 +310,13 @@ public void SyncItemData()
 	
 	do {
 		g_iPaintCount++;
-		KvGetSectionName(g_hItemsKv, chBuffer, 64);
+		KvGetSectionName(g_hItemsKv, chBuffer, 128);
 		int iSkinDefIndex = StringToInt(chBuffer);
 		
 		if (iSkinDefIndex != 0 && iSkinDefIndex != 9001) {
-			strcopy(g_chPaintInfo[g_iPaintCount][DEFINDEX], 64, chBuffer);
-			KvGetString(g_hItemsKv, "description_tag", chBuffer, 64);
-			GetItemName(chBuffer, g_chPaintInfo[g_iPaintCount][DISPLAYNAME], 64);
+			strcopy(g_chPaintInfo[g_iPaintCount][DEFINDEX], 128, chBuffer);
+			KvGetString(g_hItemsKv, "description_tag", chBuffer, 128);
+			GetItemName(chBuffer, g_chPaintInfo[g_iPaintCount][DISPLAYNAME], 128);
 		}
 	}
 	
@@ -330,9 +330,9 @@ public void SyncItemData()
 	}
 	
 	do {
-		KvGetSectionName(g_hItemsKv, chBuffer, 64); int iMusicDefIndex = StringToInt(chBuffer);
+		KvGetSectionName(g_hItemsKv, chBuffer, 128); int iMusicDefIndex = StringToInt(chBuffer);
 		if (iMusicDefIndex > 2) {
-			strcopy(g_chMusicKitInfo[g_iMusicKitCount][DEFINDEX], 64, chBuffer);
+			strcopy(g_chMusicKitInfo[g_iMusicKitCount][DEFINDEX], 128, chBuffer);
 			KvGetString(g_hItemsKv, "loc_name", chBuffer2, 128);
 			GetItemName(chBuffer2, g_chMusicKitInfo[g_iMusicKitCount][DISPLAYNAME], 128);
 			
@@ -416,7 +416,7 @@ public int Native_GetWeaponTeamByDefIndex(Handle hPlugin, int iNumParams)
 
 public int Native_GetWeaponTeamByClassName(Handle hPlugin, int iNumParams)
 {
-	char chClassName[64]; GetNativeString(1, chClassName, sizeof(chClassName));
+	char chClassName[128]; GetNativeString(1, chClassName, sizeof(chClassName));
 	
 	if (!IsValidWeaponClassName(chClassName)) {
 		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
@@ -454,7 +454,7 @@ public int Native_GetWeaponClipAmmoByDefIndex(Handle hPlugin, int iNumParams)
 
 public int Native_GetWeaponClipAmmoByClassName(Handle hPlugin, int iNumParams)
 {
-	char chClassName[64]; GetNativeString(1, chClassName, sizeof(chClassName));
+	char chClassName[128]; GetNativeString(1, chClassName, sizeof(chClassName));
 	
 	if (!IsValidWeaponClassName(chClassName)) {
 		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
@@ -499,7 +499,7 @@ public int Native_RefillClipAmmo(Handle hPlugin, int iNumParams)
 
 public int Native_GetWeaponNumByClassName(Handle hPlugin, int iNumParams)
 {
-	char chClassName[64]; GetNativeString(1, chClassName, sizeof(chClassName));
+	char chClassName[128]; GetNativeString(1, chClassName, sizeof(chClassName));
 	
 	if (!IsValidWeaponClassName(chClassName)) {
 		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
@@ -550,7 +550,7 @@ public int Native_GetWeaponDefIndexByWeaponNum(Handle hPlugin, int iNumParams)
 
 public int Native_GetWeaponDefIndexByClassName(Handle hPlugin, int iNumParams)
 {
-	char chClassName[64]; GetNativeString(1, chClassName, sizeof(chClassName));
+	char chClassName[128]; GetNativeString(1, chClassName, sizeof(chClassName));
 	
 	if (!IsValidWeaponClassName(chClassName)) {
 		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
@@ -646,7 +646,7 @@ public int Native_GetMusicKitDisplayNameByDefIndex(Handle hPlugin, int iNumParam
 
 public int Native_GetWeaponDisplayNameByClassName(Handle hPlugin, int iNumParams)
 {
-	char chClassName[64]; GetNativeString(1, chClassName, sizeof(chClassName));
+	char chClassName[128]; GetNativeString(1, chClassName, sizeof(chClassName));
 	
 	if (!IsValidWeaponClassName(chClassName)) {
 		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
@@ -699,8 +699,8 @@ public int Native_GetActiveClassName(Handle hPlugin, int iNumParams)
 	int iClient = GetNativeCell(1);
 	int iWeaponDefIndex = CSGOItems_GetActiveWeaponDefIndex(iClient);
 	
-	char chWeaponClassName[64];
-	CSGOItems_GetWeaponClassNameByDefIndex(iWeaponDefIndex, chWeaponClassName, 64);
+	char chWeaponClassName[128];
+	CSGOItems_GetWeaponClassNameByDefIndex(iWeaponDefIndex, chWeaponClassName, 128);
 	SetNativeString(2, chWeaponClassName, GetNativeCell(3));
 	
 	return true;
@@ -750,8 +750,8 @@ public int Native_IsSkinnableDefIndex(Handle hPlugin, int iNumParams)
 public int Native_FindWeaponIndexByClassName(Handle hPlugin, int iNumParams)
 {
 	int iClient = GetNativeCell(1);
-	char chClassName[64]; GetNativeString(2, chClassName, sizeof(chClassName));
-	char chBuffer[64];
+	char chClassName[128]; GetNativeString(2, chClassName, sizeof(chClassName));
+	char chBuffer[128];
 	
 	for (int iSlot = 0; iSlot <= 5; iSlot++) {
 		int iWeapon = GetPlayerWeaponSlot(iClient, iSlot);
@@ -760,7 +760,7 @@ public int Native_FindWeaponIndexByClassName(Handle hPlugin, int iNumParams)
 			continue;
 		}
 		
-		CSGOItems_GetClassNameByWeaponIndex(iWeapon, chBuffer, 64);
+		CSGOItems_GetClassNameByWeaponIndex(iWeapon, chBuffer, 128);
 		
 		if (StrEqual(chBuffer, chClassName, false)) {
 			return iWeapon;
@@ -782,7 +782,7 @@ public int Native_GetClassNameByWeaponIndex(Handle hPlugin, int iNumParams)
 {
 	int iWeapon = GetNativeCell(1);
 	int iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByWeaponIndex(iWeapon);
-	char chWeaponClassName[64]; CSGOItems_GetWeaponClassNameByDefIndex(iWeaponDefIndex, chWeaponClassName, 64);
+	char chWeaponClassName[128]; CSGOItems_GetWeaponClassNameByDefIndex(iWeaponDefIndex, chWeaponClassName, 128);
 	SetNativeString(2, chWeaponClassName, GetNativeCell(3));
 	return true;
 }
@@ -795,7 +795,7 @@ public int Native_IsValidWeapon(Handle hPlugin, int iNumParams)
 		return false;
 	}
 	
-	char chWeapon[64]; GetEdictClassname(iWeapon, chWeapon, sizeof(chWeapon));
+	char chWeapon[128]; GetEdictClassname(iWeapon, chWeapon, sizeof(chWeapon));
 	
 	return IsValidWeaponClassName(chWeapon);
 }
@@ -803,7 +803,7 @@ public int Native_IsValidWeapon(Handle hPlugin, int iNumParams)
 public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 {
 	int iClient = GetNativeCell(1);
-	char chClassName[64]; GetNativeString(2, chClassName, sizeof(chClassName));
+	char chClassName[128]; GetNativeString(2, chClassName, sizeof(chClassName));
 	
 	if (!IsValidWeaponClassName(chClassName)) {
 		return -1;
