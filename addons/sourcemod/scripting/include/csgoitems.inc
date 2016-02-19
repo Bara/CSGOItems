@@ -35,7 +35,9 @@ native int CSGOItems_GetWeaponClipAmmoByClassName(const char[] chClassName);
 native int CSGOItems_GetWeaponClipAmmoByWeaponNum(int iWeaponNum);
 native bool CSGOItems_RefillClipAmmo(int iWeapon);
 native bool CSGOItems_IsValidWeapon(int iWeapon);
-native int CSGOItems_GiveWeapon(int iClient, const char[] chClassName);
+native int CSGOItems_GiveWeapon(int iClient, const char[] chClassName, int iReserveAmmo = -1, int iClipAmmo = -1);
+native bool CSGOItems_RemoveWeapon(int iClient, int iWeapon);
+native bool CSGOItems_SetWeaponAmmo(int iWeapon, int iReserveAmmo, int iClipAmmo);
 
 // SKINS
 native int CSGOItems_GetSkinNumByDefIndex(int iDefIndex);
