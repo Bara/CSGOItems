@@ -443,7 +443,7 @@ public void SyncItemData()
 				KvGoBack(g_hItemsKv);
 				
 				KvJumpToKey(g_hItemsKv, "attributes");
-				IntToString(KvGetNum(g_hItemsKv, "primary reserve ammo max"), g_chWeaponInfo[g_iWeaponCount][CLIPAMMO], 48);
+				IntToString(KvGetNum(g_hItemsKv, "primary clip size"), g_chWeaponInfo[g_iWeaponCount][CLIPAMMO], 48);
 				
 				KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv);
 				
