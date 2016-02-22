@@ -133,7 +133,7 @@ public void DisplayWeaponMenu(int iClient, int iWeaponSlot)
 	}
 	
 	for (int i = 0; i < iCount; ++i) {  // Okay, lets loop the array.
-		GetArrayString(hArray, i, chWeaponString, 48); // We get the string.
+		GetArrayString(hArray, i, chWeaponString, 96); // We get the string.
 		ExplodeString(chWeaponString, ";", chWeaponData, 48, 48); // Lets split it.
 		
 		hMenu.AddItem(chWeaponData[1], chWeaponData[0]); // Add the weapon to menu.
