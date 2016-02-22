@@ -63,14 +63,14 @@ public void BuildMenuArray()
 		}
 		
 		char chClassName[48]; CSGOItems_GetWeaponClassNameByWeaponNum(i, chClassName, 48); // We get the ClassName
-		char chDisplayName[48]; CSGOItems_GetWeaponDisplayNameByWeaponNum(i, chDisplayName, 64); // We get the DisplayName
+		char chDisplayName[48]; CSGOItems_GetWeaponDisplayNameByWeaponNum(i, chDisplayName, 48); // We get the DisplayName
 		
 		if (StrEqual(chDisplayName, "SCAR-20", false) || StrEqual(chDisplayName, "G3SG1", false)) {  // Lets say we don't want auto snipers, its easy as this.
 			continue;
 		}
 		
 		// This part can probably be done better, although I do it like this so we can make the menu alpabetical ;)
-		char chBuffer[96]; Format(chBuffer, 64, "%s;%s", chDisplayName, chClassName); // We format 1 string containing the DisplayName and ClassName which we can split later.
+		char chBuffer[96]; Format(chBuffer, 96, "%s;%s", chDisplayName, chClassName); // We format 1 string containing the DisplayName and ClassName which we can split later.
 		
 		// Lets push the weapons into the right arrays.
 		switch (iWeaponSlot) {
@@ -110,8 +110,8 @@ public Action CommandListener(int iClient, char[] ChCommand, int iArg)
 
 public void DisplayWeaponMenu(int iClient, int iWeaponSlot)
 {
-	char chWeaponString[48]; // The string we received from array.
-	char chWeaponData[64][64]; // Used for splitting.
+	char chWeaponString[96]; // The string we received from array.
+	char chWeaponData[48][48]; // Used for splitting.
 	
 	Menu hMenu = CreateMenu(Menu_Handler); // Create a menu.
 	
@@ -133,8 +133,8 @@ public void DisplayWeaponMenu(int iClient, int iWeaponSlot)
 	}
 	
 	for (int i = 0; i < iCount; ++i) {  // Okay, lets loop the array.
-		GetArrayString(hArray, i, chWeaponString, 64); // We get the string.
-		ExplodeString(chWeaponString, ";", chWeaponData, 64, 64); // Lets split it.
+		GetArrayString(hArray, i, chWeaponString, 48); // We get the string.
+		ExplodeString(chWeaponString, ";", chWeaponData, 48, 48); // Lets split it.
 		
 		hMenu.AddItem(chWeaponData[1], chWeaponData[0]); // Add the weapon to menu.
 	}
