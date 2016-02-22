@@ -678,6 +678,10 @@ public int Native_SetWeaponAmmo(Handle hPlugin, int iNumParams)
 	int iReserveAmmo = GetNativeCell(2);
 	int iClipAmmo = GetNativeCell(3);
 	
+	if(iReserveAmmo == -1 && iClipAmmo == -1) {
+		return false;
+	}
+	
 	if (!CSGOItems_IsValidWeapon(iWeapon)) {
 		return false;
 	}
@@ -700,7 +704,8 @@ public int Native_RefillClipAmmo(Handle hPlugin, int iNumParams)
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StringToInt(g_chWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-			CSGOItems_SetWeaponAmmo(iWeapon, -1, StringToInt(g_chWeaponInfo[iWeaponNum][CLIPAMMO]));
+			int iClipAmmo = StringToInt(g_chWeaponInfo[iWeaponNum][CLIPAMMO]);
+			CSGOItems_SetWeaponAmmo(iWeapon, -1, iClipAmmo > 0 ? iClipAmmo : -1);
 			return true;
 		}
 	}
