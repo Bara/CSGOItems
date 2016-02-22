@@ -968,10 +968,10 @@ public int Native_FindWeaponByClassName(Handle hPlugin, int iNumParams)
 	char chClassName[48]; GetNativeString(2, chClassName, sizeof(chClassName));
 	char chBuffer[48];
 	
-	for (int iSlot = 0; iSlot <= 5; iSlot++) {
+	CSGOItems_LoopWeaponSlots(iSlot) {
 		int iWeapon = GetPlayerWeaponSlot(iClient, iSlot);
 		
-		if (iWeapon == -1) {
+		if (CSGOItems_IsValidWeapon(iWeapon)) {
 			continue;
 		}
 		
@@ -1026,6 +1026,7 @@ public int Native_GetWeaponSlotByClassName(Handle hPlugin, int iNumParams)
 public int Native_GetWeaponClassNameByWeapon(Handle hPlugin, int iNumParams)
 {
 	int iWeapon = GetNativeCell(1);
+	
 	if (!CSGOItems_IsValidWeapon(iWeapon)) {
 		return false;
 	}
