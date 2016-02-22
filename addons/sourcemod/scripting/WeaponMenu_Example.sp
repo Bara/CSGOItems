@@ -13,6 +13,8 @@ Handle g_hSecondaryArray = null;
 int g_iPrimaryCount = 0;
 int g_iSecondaryCount = 0;
 
+bool g_bLateLoaded;
+
 char g_chMenuTriggers[][] =  {
 	"!guns", "/guns", "!gun", "/gun", "!weapon", "/weapon", "!weapons", "/weapons", "guns", "gun", "weapon"
 };
@@ -25,6 +27,10 @@ public Plugin myinfo =
 	version = PLUGIN_VERSION, 
 	url = "www.fragdeluxe.com"
 };
+
+public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] chError, int iErrMax) {
+	g_bLateLoaded = bLate;
+}
 
 public void OnPluginStart()
 {
@@ -40,6 +46,15 @@ public void OnPluginStart()
 	// Lets create the 2 arrays to store our weapons.
 	g_hPrimaryArray = CreateArray(128);
 	g_hSecondaryArray = CreateArray(128);
+	
+	// Lets also account for late load otherwise our Weapon Menus are going to be empty.
+	if (g_bLateLoaded) {
+		if (CSGOItems_AreItemsSynced()) {
+			CSGOItems_OnItemsSynced();
+		} else if (!CSGOItems_AreItemsSyncing()) {
+			CSGOItems_ReSync();
+		}
+	}
 }
 
 public void CSGOItems_OnItemsSynced() {
