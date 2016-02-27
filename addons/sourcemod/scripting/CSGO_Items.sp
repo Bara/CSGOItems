@@ -410,8 +410,8 @@ public void SyncItemData()
 			g_iWeaponCount++;
 			
 			KvGetSectionName(g_hItemsKv, g_chWeaponInfo[g_iWeaponCount][DEFINDEX], 48);
-			
 			strcopy(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], 48, chBuffer);
+			
 			if (StrEqual(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], "weapon_c4", false)) {
 				g_chWeaponInfo[g_iWeaponCount][TEAM] = "2";
 			}
@@ -1177,7 +1177,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	float fNextPlayerAttackTime = GetEntPropFloat(iClient, Prop_Send, "m_flNextAttack");
 	
 	int iReloadVisuallyComplete = -1;
-	int iReloadState = -1;
 	int iWeaponSilencer = -1;
 	int iWeaponMode = -1;
 	int iRecoilIndex = -1;
@@ -1210,7 +1209,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 			iWeaponMode = GetEntProp(iCurrentWeapon, Prop_Send, "m_weaponMode");
 			iRecoilIndex = GetEntProp(iCurrentWeapon, Prop_Send, "m_iRecoilIndex");
 			iIronSightMode = GetEntProp(iCurrentWeapon, Prop_Send, "m_iIronSightMode");
-			iBurstShotsRemaining = GetEntProp(iCurrentWeapon, Prop_Send, "m_iBurstShotsRemaining");
 			fDoneSwitchingSilencer = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_flDoneSwitchingSilencer");
 			fLastShotTime = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_fLastShotTime");
 			
@@ -1219,11 +1217,13 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 			}
 			
 			if (StrEqual(g_chWeaponInfo[CSGOItems_GetWeaponNumByClassName(chCurrentClassName)][TYPE], "Shotgun", false)) {
-				iReloadState = GetEntProp(iCurrentWeapon, Prop_Send, "m_reloadState");
+				iBurstShotsRemaining = GetEntProp(iCurrentWeapon, Prop_Send, "m_iBurstShotsRemaining");
 			}
-		}
-		
-		if (!CSGOItems_RemoveWeapon(iClient, iCurrentWeapon)) {
+			
+			if(!CSGOItems_RemoveWeapon(iClient, iCurrentWeapon)) {
+				return -1;
+			}
+		} else if(!CSGOItems_RemoveKnife(iClient)) {
 			return -1;
 		}
 	}
@@ -1257,7 +1257,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	int iActiveWeapon = CSGOItems_GetActiveWeapon(iClient);
 	
 	if (StrEqual(chClassName, chCurrentClassName, false) && iActiveWeapon == iWeapon && iSwitchWeapon == iWeapon) {
-		
 		if (iLookingAtWeapon > -1) {
 			SetEntProp(iClient, Prop_Send, "m_bIsLookingAtWeapon", iLookingAtWeapon);
 		}
@@ -1268,10 +1267,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		
 		if (fNextPlayerAttackTime > 0.0) {
 			SetEntPropFloat(iClient, Prop_Send, "m_flNextAttack", fNextPlayerAttackTime);
-		}
-		
-		if (iReloadState > -1) {
-			SetEntProp(iClient, Prop_Send, "m_reloadState", iReloadState);
 		}
 		
 		if (fNextPrimaryAttack > 0.0) {
@@ -1324,10 +1319,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		
 		if (bShotGun && iBurstShotsRemaining > -1) {
 			SetEntProp(iWeapon, Prop_Send, "m_iBurstShotsRemaining", iBurstShotsRemaining);
-		}
-		
-		if (bShotGun && iReloadState > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_reloadState", iReloadState);
 		}
 	}
 	
