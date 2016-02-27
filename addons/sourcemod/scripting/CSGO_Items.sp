@@ -412,7 +412,6 @@ public void SyncItemData()
 			KvGetSectionName(g_hItemsKv, g_chWeaponInfo[g_iWeaponCount][DEFINDEX], 48);
 			
 			strcopy(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], 48, chBuffer);
-			
 			if (StrEqual(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], "weapon_c4", false)) {
 				g_chWeaponInfo[g_iWeaponCount][TEAM] = "2";
 			}
@@ -585,6 +584,7 @@ stock void GetWeaponClip(char[] chClassName, char[] chReturn, int iLength)
 	char chBuffer[128]; Format(chBuffer, 64, "scripts/%s.txt", chClassName);
 	
 	Handle hFile = OpenFile(chBuffer, "r");
+	bool bFound = false;
 	
 	if (hFile == null) {
 		strcopy(chReturn, iLength, "-1");
@@ -595,12 +595,16 @@ stock void GetWeaponClip(char[] chClassName, char[] chReturn, int iLength)
 		if (StrContains(chBuffer, "clip_size", false) != -1 && StrContains(chBuffer, "default", false) == -1) {
 			ReplaceString(chBuffer, 128, "clip_size", "", false); ReplaceString(chBuffer, 128, "\"", "", false);
 			TrimString(chBuffer); StripQuotes(chBuffer);
-			strcopy(chReturn, iLength, chBuffer);
-			return;
+			bFound = true; 
+			break;
 		}
 	}
 	
-	strcopy(chReturn, iLength, "-1");
+	if(!bFound) {
+		strcopy(chReturn, iLength, "-1");
+	}
+	
+	CloseHandle(hFile);
 }
 
 stock bool IsValidWeaponClassName(char[] chClassName)
@@ -1417,7 +1421,6 @@ public int Native_GetActiveWeaponSlot(Handle hPlugin, int iNumParams)
 public int Native_RemoveKnife(Handle hPlugin, int iNumParams)
 {
 	int iClient = GetNativeCell(1);
-	char chBuffer[64];
 	
 	LoopValidWeapons(iWeapon) {
 		if (GetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity") != iClient) {
@@ -1425,7 +1428,6 @@ public int Native_RemoveKnife(Handle hPlugin, int iNumParams)
 		}
 		
 		int iDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
-		CSGOItems_GetWeaponClassNameByDefIndex(iDefIndex, chBuffer, 64);
 		
 		if (!CSGOItems_IsDefIndexKnife(iDefIndex)) {
 			continue;
