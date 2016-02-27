@@ -584,7 +584,6 @@ stock void GetWeaponClip(char[] chClassName, char[] chReturn, int iLength)
 	char chBuffer[128]; Format(chBuffer, 64, "scripts/%s.txt", chClassName);
 	
 	Handle hFile = OpenFile(chBuffer, "r");
-	bool bFound = false;
 	
 	if (hFile == null) {
 		strcopy(chReturn, iLength, "-1");
@@ -595,12 +594,12 @@ stock void GetWeaponClip(char[] chClassName, char[] chReturn, int iLength)
 		if (StrContains(chBuffer, "clip_size", false) != -1 && StrContains(chBuffer, "default", false) == -1) {
 			ReplaceString(chBuffer, 128, "clip_size", "", false); ReplaceString(chBuffer, 128, "\"", "", false);
 			TrimString(chBuffer); StripQuotes(chBuffer);
-			bFound = true; 
+			strcopy(chReturn, iLength, chBuffer);
 			break;
 		}
 	}
 	
-	if(!bFound) {
+	if(StrEqual(chBuffer, "", false)) {
 		strcopy(chReturn, iLength, "-1");
 	}
 	
