@@ -56,6 +56,10 @@ CHANGELOG
 			- Added CSGOItems_RefillReserveAmmo.
 			- Added Reserve ammo natives (For retrieving the values).
 			- General Cleanup.
+		0.7 ~
+			- Removed System2.
+			- Using SteamWorks now to retrieve language file.
+			- Fixed potential infinite loop / crash.
 			
 ****************************************************************************************************
 INCLUDES
@@ -64,12 +68,12 @@ INCLUDES
 #include <sdktools>
 #include <cstrike> 
 #include <csgoitems> 
-#include <system2> 
+#include <SteamWorks> 
 
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "0.6"
+#define VERSION "0.7"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -113,6 +117,7 @@ bool g_bIsDefIndexKnife[600];
 bool g_bIsDefIndexSkinnable[600];
 bool g_bItemsSynced;
 bool g_bItemsSyncing;
+bool g_bLanguageDownloading;
 /****************************************************************************************************
 STRINGS.
 *****************************************************************************************************/
@@ -164,8 +169,10 @@ public void OnPluginStart()
 	g_hSwitchWeaponCall = EndPrepSDKCall();
 	
 	CloseHandle(hConfig);
-	
-	DownloadLanguageFile(true);
+}
+
+public int SteamWorks_SteamServersConnected() {
+	RetrieveLanguage();
 }
 
 public void OnPluginEnd()
@@ -276,74 +283,54 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] chError, int iEr
 	CreateNative("CSGOItems_GetMusicKitDisplayNameByWeaponNum", Native_GetMusicKitDisplayNameByMusicKitNum);
 }
 
-public Action SteamWorks_RestartRequested() {
-	DownloadLanguageFile(false);
-}
-
-public int DownloadLanguageFile(bool bStorePhrases) {
-	if (g_bItemsSyncing) {
+public bool RetrieveLanguage()
+{
+	if (g_bItemsSyncing || g_bLanguageDownloading) {
 		return false;
 	}
 	
-	if (!FileExists("resource/csgo_english_utf8.txt")) {
-		System2_DownloadFile(OnLanguageDownload, LANGURL, "resource/csgo_english_utf8.txt", bStorePhrases);
-	} else {
-		System2_DownloadFile(OnLanguageDownload, LANGURL, "resource/csgo_english_utf8_new.txt", bStorePhrases);
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, LANGURL);
+	
+	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Pragma", "no-cache");
+	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Cache-Control", "no-cache");
+	SteamWorks_SetHTTPCallbacks(hRequest, Language_Retrieved);
+	
+	if (SteamWorks_SendHTTPRequest(hRequest)) {
+		g_bLanguageDownloading = true;
+		g_iDownloadAttempts++;
+		return true;
 	}
 	
-	g_iDownloadAttempts++;
-	
-	return true;
+	return false;
 }
 
-public int OnLanguageDownload(bool bFinished, const char[] chError, float fTotal, float fNow, float fUtotal, float fUnow, bool bStorePhrases)
-{
-	bool bFileExists = FileExists("resource/csgo_english_utf8.txt");
-	bool bFileExists2 = FileExists("resource/csgo_english_utf8_new.txt");
-	
-	if (bFinished) {
-		if (bStorePhrases) {
-			StoreLanguagePhrases();
-		}
-	}
-	
-	else if (!StrEqual(chError, "")) {
-		if (g_iDownloadAttempts < 10) {
-			DownloadLanguageFile(bStorePhrases);
-		}
-		
-		else if (bFileExists || bFileExists2) {
-			if (bStorePhrases) {
-				StoreLanguagePhrases();
-			}
-			
-			LogError("UTF-8 language download failed after %d attempts, attempting to use old file. \nCheck: %s", g_iDownloadAttempts, LANGURL);
-		}
-		
-		else if (!bFileExists && !bFileExists2) {
-			Call_StartForward(g_hOnPluginEnd);
-			Call_Finish();
-			SetFailState("Could not download the UTF-8 language and no old file was found, maybe github is down? \nCheck: %s", LANGURL);
-		}
-	}
-}
-
-public void StoreLanguagePhrases()
+public int Language_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything)
 {
 	Handle hLanguageFile = OpenFile("resource/csgo_english_utf8.txt", "r");
 	Handle hLanguageFileNew = OpenFile("resource/csgo_english_utf8_new.txt", "r");
 	
-	if (hLanguageFileNew != null && ReadFileString(hLanguageFileNew, g_chLangPhrases, 2198296) && StrContains(g_chLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
-		DeleteFile("resource/csgo_english_utf8.txt");
-		RenameFile("resource/csgo_english_utf8.txt", "resource/csgo_english_utf8_new.txt");
-	}
-	
-	else if (hLanguageFile != null && ReadFileString(hLanguageFile, g_chLangPhrases, 2198296) && StrContains(g_chLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
-		DeleteFile("resource/csgo_english_utf8_new.txt");
+	if (bRequestSuccessful && eStatusCode == k_EHTTPStatusCode200OK) {
+		if (!FileExists("resource/csgo_english_utf8.txt")) {
+			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "resource/csgo_english_utf8.txt");
+		} else {
+			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "resource/csgo_english_utf8_new.txt");
+		}
+		
+		DataPack dPack = CreateDataPack();
+		
+		WritePackCell(dPack, hRequest);
+		WritePackCell(dPack, hLanguageFile);
+		WritePackCell(dPack, hLanguageFileNew);
+		ResetPack(dPack);
+		
+		CreateTimer(1.0, Timer_SyncLanguage, dPack);
 	}
 	
 	else {
-		DeleteFile("resource/csgo_english_utf8.txt"); DeleteFile("resource/csgo_english_utf8_new.txt");
+		g_bLanguageDownloading = false;
+		if (hRequest != null) {
+			CloseHandle(hRequest);
+		}
 		
 		if (hLanguageFile != null) {
 			CloseHandle(hLanguageFile);
@@ -353,14 +340,62 @@ public void StoreLanguagePhrases()
 			CloseHandle(hLanguageFileNew);
 		}
 		
+		DeleteFile("resource/csgo_english_utf8.txt"); DeleteFile("resource/csgo_english_utf8_new.txt");
+		
 		if (g_iDownloadAttempts < 10) {
-			DownloadLanguageFile(true);
+			RetrieveLanguage();
 			return;
 		} else {
 			Call_StartForward(g_hOnPluginEnd);
 			Call_Finish();
 			SetFailState("UTF-8 language file is corrupted, failed after %d attempts. \nCheck: %s", g_iDownloadAttempts, LANGURL);
 		}
+	}
+}
+
+public Action Timer_SyncLanguage(Handle hTimer, DataPack dPack)
+{
+	Handle hRequest = ReadPackCell(dPack);
+	Handle hLanguageFile = ReadPackCell(dPack);
+	Handle hLanguageFileNew = ReadPackCell(dPack);
+	
+	if (hLanguageFileNew != null && ReadFileString(hLanguageFileNew, g_chLangPhrases, 2198296) && StrContains(g_chLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
+		DeleteFile("resource/csgo_english_utf8.txt");
+		RenameFile("resource/csgo_english_utf8.txt", "resource/csgo_english_utf8_new.txt");
+	}
+	
+	else if (hLanguageFile != null && ReadFileString(hLanguageFile, g_chLangPhrases, 2198296) && StrContains(g_chLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
+		DeleteFile("resource/csgo_english_utf8_new.txt");
+	}
+	else {
+		g_bLanguageDownloading = false;
+		
+		if (hRequest != null) {
+			CloseHandle(hRequest);
+		}
+		
+		if (hLanguageFile != null) {
+			CloseHandle(hLanguageFile);
+		}
+		
+		if (hLanguageFileNew != null) {
+			CloseHandle(hLanguageFileNew);
+		}
+		
+		DeleteFile("resource/csgo_english_utf8.txt"); DeleteFile("resource/csgo_english_utf8_new.txt");
+		
+		if (g_iDownloadAttempts < 10) {
+			RetrieveLanguage();
+			return Plugin_Stop;
+		} else {
+			Call_StartForward(g_hOnPluginEnd);
+			Call_Finish();
+			SetFailState("UTF-8 language file is corrupted, failed after %d attempts. \nCheck: %s", g_iDownloadAttempts, LANGURL);
+		}
+	}
+	
+	if (hRequest != null) {
+		CloseHandle(hRequest);
 	}
 	
 	if (hLanguageFile != null) {
@@ -371,10 +406,15 @@ public void StoreLanguagePhrases()
 		CloseHandle(hLanguageFileNew);
 	}
 	
+	g_bLanguageDownloading = false;
 	g_iDownloadAttempts = 0;
 	LogMessage("UTF-8 language file successfully processed, starting item data synchronization.");
 	
-	SyncItemData();
+	if (!g_bItemsSyncing) {
+		SyncItemData();
+	}
+	
+	return Plugin_Stop;
 }
 
 public void SyncItemData()
@@ -599,7 +639,7 @@ stock void GetWeaponClip(char[] chClassName, char[] chReturn, int iLength)
 		}
 	}
 	
-	if(StrEqual(chBuffer, "", false)) {
+	if (StrEqual(chBuffer, "", false)) {
 		strcopy(chReturn, iLength, "-1");
 	}
 	
@@ -1220,10 +1260,10 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 				iBurstShotsRemaining = GetEntProp(iCurrentWeapon, Prop_Send, "m_iBurstShotsRemaining");
 			}
 			
-			if(!CSGOItems_RemoveWeapon(iClient, iCurrentWeapon)) {
+			if (!CSGOItems_RemoveWeapon(iClient, iCurrentWeapon)) {
 				return -1;
 			}
-		} else if(!CSGOItems_RemoveKnife(iClient)) {
+		} else if (!CSGOItems_RemoveKnife(iClient)) {
 			return -1;
 		}
 	}
@@ -1388,7 +1428,7 @@ public int Native_AreItemsSyncing(Handle hPlugin, int iNumParams) {
 }
 
 public int Native_Resync(Handle hPlugin, int iNumParams) {
-	return DownloadLanguageFile(true);
+	return RetrieveLanguage();
 }
 
 public int Native_GetActiveWeaponSlot(Handle hPlugin, int iNumParams)
