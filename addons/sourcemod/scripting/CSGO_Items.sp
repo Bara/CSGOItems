@@ -68,6 +68,7 @@ INCLUDES
 #include <sdktools>
 #include <cstrike> 
 #include <csgoitems> 
+#include <sdkhooks> 
 #include <SteamWorks> 
 
 /****************************************************************************************************
@@ -118,6 +119,9 @@ bool g_bIsDefIndexSkinnable[600];
 bool g_bItemsSynced;
 bool g_bItemsSyncing;
 bool g_bLanguageDownloading;
+bool g_bClientEquipping[MAXPLAYERS + 1];
+bool g_bGivingWeapon[MAXPLAYERS + 1];
+bool g_bWeaponEquipping[2049];
 /****************************************************************************************************
 STRINGS.
 *****************************************************************************************************/
@@ -599,6 +603,28 @@ public void SyncItemData()
 	
 	g_bItemsSynced = true;
 	g_bItemsSyncing = false;
+}
+
+public void OnClientPutInServer(int iClient) {
+	SDKHook(iClient, SDKHook_WeaponEquip, OnWeaponEquip_Pre);
+	SDKHook(iClient, SDKHook_WeaponEquipPost, OnWeaponEquip_Post);
+}
+
+public void OnClientDisconnect(int iClient) {
+	g_bClientEquipping[iClient] = false;
+	g_bGivingWeapon[iClient] = false;
+}
+
+public Action OnWeaponEquip_Pre(int iClient, int iWeapon)
+{
+	g_bClientEquipping[iClient] = true;
+	g_bWeaponEquipping[iWeapon] = true;
+}
+
+public Action OnWeaponEquip_Post(int iClient, int iWeapon)
+{
+	g_bClientEquipping[iClient] = false;
+	g_bWeaponEquipping[iWeapon] = false;
 }
 
 stock void GetItemName(char[] chPhrase, char[] chBuffer, int iLength)
@@ -1189,10 +1215,18 @@ public int Native_IsValidWeapon(Handle hPlugin, int iNumParams)
 public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 {
 	int iClient = GetNativeCell(1);
+	
 	char chClassName[48]; GetNativeString(2, chClassName, sizeof(chClassName));
 	
 	int iReserveAmmo = GetNativeCell(3);
 	int iClipAmmo = GetNativeCell(4);
+	int iSwitchTo = GetNativeCell(5);
+	
+	if(g_bClientEquipping[iClient] || g_bGivingWeapon[iClient]) {
+		return -1;
+	}
+	
+	g_bGivingWeapon[iClient] = true;
 	
 	int iClientTeam = GetClientTeam(iClient);
 	
@@ -1208,21 +1242,18 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	
 	int iWeaponTeam = CSGOItems_GetWeaponTeamByClassName(chClassName);
 	int iWeaponNum = CSGOItems_GetWeaponNumByClassName(chClassName);
-	int iSwitchTo = GetNativeCell(5);
 	int iWeaponDefIndex = -1;
-	
 	int iLookingAtWeapon = GetEntProp(iClient, Prop_Send, "m_bIsLookingAtWeapon");
 	int iHoldingLookAtWeapon = GetEntProp(iClient, Prop_Send, "m_bIsHoldingLookAtWeapon");
-	
-	float fNextPlayerAttackTime = GetEntPropFloat(iClient, Prop_Send, "m_flNextAttack");
-	
 	int iReloadVisuallyComplete = -1;
 	int iWeaponSilencer = -1;
 	int iWeaponMode = -1;
 	int iRecoilIndex = -1;
 	int iIronSightMode = -1;
 	int iZoomLevel = -1;
+	int iCurrentWeapon = GetPlayerWeaponSlot(iClient, CSGOItems_GetWeaponSlotByClassName(chClassName));
 	
+	float fNextPlayerAttackTime = GetEntPropFloat(iClient, Prop_Send, "m_flNextAttack");
 	float fDoneSwitchingSilencer = 0.0;
 	float fNextPrimaryAttack = 0.0;
 	float fNextSecondaryAttack = 0.0;
@@ -1230,10 +1261,13 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	float fAccuracyPenalty = 0.0;
 	float fLastShotTime = 0.0;
 	
-	int iCurrentWeapon = GetPlayerWeaponSlot(iClient, CSGOItems_GetWeaponSlotByClassName(chClassName));
 	char chCurrentClassName[48];
 	
 	if (CSGOItems_IsValidWeapon(iCurrentWeapon)) {
+		if(g_bWeaponEquipping[iCurrentWeapon]) {
+			return -1;
+		}
+		
 		CSGOItems_GetWeaponClassNameByWeapon(iCurrentWeapon, chCurrentClassName, 48);
 		iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iCurrentWeapon);
 		
@@ -1272,6 +1306,12 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	}
 	
 	int iWeapon = GivePlayerItem(iClient, chClassName);
+	
+	if(CSGOItems_IsValidWeapon(iWeapon)) {
+		g_bGivingWeapon[iClient] = false;
+	} else {
+		return -1;
+	}
 	
 	bool bDefIndexKnife = CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByWeapon(iWeapon));
 	bool bSniper = StrEqual(g_chWeaponInfo[iWeaponNum][TYPE], "sniper_rifle", false);
@@ -1384,6 +1424,10 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 	int iWeapon = GetNativeCell(2);
 	
 	if (!CSGOItems_IsValidWeapon(iWeapon) || !IsPlayerAlive(iClient)) {
+		return false;
+	}
+	
+	if(g_bClientEquipping[iClient] || g_bWeaponEquipping[iWeapon]) {
 		return false;
 	}
 	
