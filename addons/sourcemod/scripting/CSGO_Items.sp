@@ -1109,7 +1109,7 @@ public int Native_FindWeaponByClassName(Handle hPlugin, int iNumParams)
 	CSGOItems_LoopWeaponSlots(iSlot) {
 		int iWeapon = GetPlayerWeaponSlot(iClient, iSlot);
 		
-		if (CSGOItems_IsValidWeapon(iWeapon)) {
+		if (!CSGOItems_IsValidWeapon(iWeapon)) {
 			continue;
 		}
 		
@@ -1222,7 +1222,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	int iRecoilIndex = -1;
 	int iIronSightMode = -1;
 	int iZoomLevel = -1;
-	int iBurstShotsRemaining = -1;
 	
 	float fDoneSwitchingSilencer = 0.0;
 	float fNextPrimaryAttack = 0.0;
@@ -1256,10 +1255,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 				iZoomLevel = GetEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel");
 			}
 			
-			if (StrEqual(g_chWeaponInfo[CSGOItems_GetWeaponNumByClassName(chCurrentClassName)][TYPE], "Shotgun", false)) {
-				iBurstShotsRemaining = GetEntProp(iCurrentWeapon, Prop_Send, "m_iBurstShotsRemaining");
-			}
-			
 			if (!CSGOItems_RemoveWeapon(iClient, iCurrentWeapon)) {
 				return -1;
 			}
@@ -1279,7 +1274,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	int iWeapon = GivePlayerItem(iClient, chClassName);
 	
 	bool bDefIndexKnife = CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByWeapon(iWeapon));
-	bool bShotGun = StrEqual(g_chWeaponInfo[iWeaponNum][TYPE], "Shotgun", false);
 	bool bSniper = StrEqual(g_chWeaponInfo[iWeaponNum][TYPE], "sniper_rifle", false);
 	
 	if (bDefIndexKnife) {
@@ -1355,10 +1349,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		
 		if (iZoomLevel > -1 && bSniper) {
 			SetEntProp(iWeapon, Prop_Send, "m_zoomLevel", iZoomLevel);
-		}
-		
-		if (bShotGun && iBurstShotsRemaining > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_iBurstShotsRemaining", iBurstShotsRemaining);
 		}
 	}
 	
