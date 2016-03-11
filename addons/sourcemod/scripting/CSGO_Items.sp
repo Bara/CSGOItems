@@ -1512,13 +1512,7 @@ public int Native_SetAllWeaponsAmmo(Handle hPlugin, int iNumParams)
 			continue;
 		}
 		
-		if (iReserveAmmo > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_iPrimaryReserveAmmoCount", iReserveAmmo);
-		}
-		
-		if (iClipAmmo > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_iClip1", iClipAmmo);
-		}
+		CSGOItems_SetWeaponAmmo(iWeapon, iReserveAmmo, iClipAmmo);
 	}
 }
 
