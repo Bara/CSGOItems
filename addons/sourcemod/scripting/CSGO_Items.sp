@@ -320,58 +320,21 @@ public bool RetrieveLanguage()
 
 public int Language_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything)
 {
-	Handle hLanguageFile = OpenFile("resource/csgo_english_utf8.txt", "r");
-	Handle hLanguageFileNew = OpenFile("resource/csgo_english_utf8_new.txt", "r");
-	
 	if (bRequestSuccessful && eStatusCode == k_EHTTPStatusCode200OK) {
-		if (!FileExists("resource/csgo_english_utf8.txt")) {
-			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "resource/csgo_english_utf8.txt");
-		} else {
+		if (FileExists("resource/csgo_english_utf8.txt")) {
 			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "resource/csgo_english_utf8_new.txt");
+		} else {
+			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "resource/csgo_english_utf8.txt");
 		}
-		
-		DataPack dPack = CreateDataPack();
-		
-		WritePackCell(dPack, hRequest);
-		WritePackCell(dPack, hLanguageFile);
-		WritePackCell(dPack, hLanguageFileNew);
-		ResetPack(dPack);
-		
-		CreateTimer(1.0, Timer_SyncLanguage, dPack);
 	}
 	
-	else {
-		g_bLanguageDownloading = false;
-		if (hRequest != null) {
-			CloseHandle(hRequest);
-		}
-		
-		if (hLanguageFile != null) {
-			CloseHandle(hLanguageFile);
-		}
-		
-		if (hLanguageFileNew != null) {
-			CloseHandle(hLanguageFileNew);
-		}
-		
-		DeleteFile("resource/csgo_english_utf8.txt"); DeleteFile("resource/csgo_english_utf8_new.txt");
-		
-		if (g_iDownloadAttempts < 10) {
-			RetrieveLanguage();
-			return;
-		} else {
-			Call_StartForward(g_hOnPluginEnd);
-			Call_Finish();
-			SetFailState("UTF-8 language file is corrupted, failed after %d attempts. \nCheck: %s", g_iDownloadAttempts, LANGURL);
-		}
-	}
+	CreateTimer(2.0, Timer_SyncLanguage, hRequest);
 }
 
-public Action Timer_SyncLanguage(Handle hTimer, DataPack dPack)
+public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 {
-	Handle hRequest = ReadPackCell(dPack);
-	Handle hLanguageFile = ReadPackCell(dPack);
-	Handle hLanguageFileNew = ReadPackCell(dPack);
+	Handle hLanguageFile = OpenFile("resource/csgo_english_utf8.txt", "r");
+	Handle hLanguageFileNew = OpenFile("resource/csgo_english_utf8_new.txt", "r");
 	
 	if (hLanguageFileNew != null && ReadFileString(hLanguageFileNew, g_chLangPhrases, 2198296) && StrContains(g_chLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
 		DeleteFile("resource/csgo_english_utf8.txt");
