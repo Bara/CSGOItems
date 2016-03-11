@@ -60,6 +60,13 @@ CHANGELOG
 			- Removed System2.
 			- Using SteamWorks now to retrieve language file.
 			- Fixed potential infinite loop / crash.
+		0.8 ~
+			- General optimization / cleanup.
+			- Added CSGOItems_GetRandomSkin
+							This function will return a random skin defindex.		
+			
+			- Added CSGOItems_SetAllWeaponsAmmo
+							This function will loop through all spawned weapons of a specific classname and set clip/reserve ammo.
 			
 ****************************************************************************************************
 INCLUDES
@@ -74,7 +81,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "0.7"
+#define VERSION "0.8"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -138,16 +145,17 @@ static char g_chViewSequence1[][] =  {
 /****************************************************************************************************
 INTS.
 *****************************************************************************************************/
-int g_iPaintCount = 0;
-int g_iWeaponCount = 0;
-int g_iMusicKitCount = 0;
-int g_iDownloadAttempts = 0;
+int g_iPaintCount;
+int g_iWeaponCount;
+int g_iMusicKitCount;
+int g_iDownloadAttempts;
 
 #define CSGOItems_LoopWeapons(%1) for(int %1; %1 <= g_iWeaponCount; %1++)
 #define CSGOItems_LoopSkins(%1) for(int %1; %1 <= g_iPaintCount; %1++)
 #define CSGOItems_LoopMusicKits(%1) for(int %1; %1 <= g_iMusicKitCount; %1++)
 #define CSGOItems_LoopWeaponSlots(%1) for(int %1; %1 <= 6; %1++)
-#define LoopValidWeapons(%1) for(int %1 = MaxClients; %1 <= 2048; %1++) if(CSGOItems_IsValidWeapon(%1))
+#define CSGOItems_LoopValidWeapons(%1) for(int %1 = MaxClients; %1 <= 2048; %1++) if(CSGOItems_IsValidWeapon(%1))
+#define CSGOItems_LoopValidClients(%1) for(int %1 = 1; %1 <= MaxClients; %1++) if(IsValidClient(%1))
 
 public void OnPluginStart()
 {
@@ -237,6 +245,7 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] chError, int iEr
 	CreateNative("CSGOItems_GetWeaponReserveAmmoByClassName", Native_GetWeaponReserveAmmoByClassName);
 	CreateNative("CSGOItems_GetWeaponReserveAmmoByWeaponNum", Native_GetWeaponReserveAmmoByWeaponNum);
 	CreateNative("CSGOItems_SetWeaponAmmo", Native_SetWeaponAmmo);
+	CreateNative("CSGOItems_SetAllWeaponsAmmo", Native_SetAllWeaponsAmmo);
 	CreateNative("CSGOItems_RefillClipAmmo", Native_RefillClipAmmo);
 	CreateNative("CSGOItems_RefillReserveAmmo", Native_RefillReserveAmmo);
 	
@@ -271,6 +280,7 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] chError, int iEr
 	
 	// Misc
 	CreateNative("CSGOItems_IsSkinnableDefIndex", Native_IsSkinnableDefIndex);
+	CreateNative("CSGOItems_GetRandomSkin", Native_GetRandomSkin);
 	
 	/****************************************************************************************************
 											--MUSIC KIT NATIVES--
@@ -617,14 +627,26 @@ public void OnClientDisconnect(int iClient) {
 
 public Action OnWeaponEquip_Pre(int iClient, int iWeapon)
 {
+	if (!CSGOItems_IsValidWeapon(iWeapon)) {
+		return Plugin_Handled;
+	}
+	
 	g_bClientEquipping[iClient] = true;
 	g_bWeaponEquipping[iWeapon] = true;
+	
+	return Plugin_Continue;
 }
 
 public Action OnWeaponEquip_Post(int iClient, int iWeapon)
 {
+	if (!CSGOItems_IsValidWeapon(iWeapon)) {
+		return Plugin_Handled;
+	}
+	
 	g_bClientEquipping[iClient] = false;
 	g_bWeaponEquipping[iWeapon] = false;
+	
+	return Plugin_Continue;
 }
 
 stock void GetItemName(char[] chPhrase, char[] chBuffer, int iLength)
@@ -680,6 +702,15 @@ stock bool IsValidWeaponClassName(char[] chClassName)
 stock bool IsSpecialPrefab(char[] chPrefabName)
 {
 	return StrContains(chPrefabName, "_prefab") == -1;
+}
+
+stock bool IsValidClient(int iClient)
+{
+	if (iClient <= 0 || iClient > MaxClients) {
+		return false;
+	}
+	
+	return IsClientInGame(iClient);
 }
 
 stock int SlotNameToNum(const char[] chSlotName)
@@ -749,11 +780,6 @@ public int Native_GetWeaponTeamByClassName(Handle hPlugin, int iNumParams)
 {
 	char chClassName[48]; GetNativeString(1, chClassName, sizeof(chClassName));
 	
-	if (!IsValidWeaponClassName(chClassName)) {
-		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
-		return -1;
-	}
-	
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
 			return StringToInt(g_chWeaponInfo[iWeaponNum][TEAM]);
@@ -787,11 +813,6 @@ public int Native_GetWeaponClipAmmoByClassName(Handle hPlugin, int iNumParams)
 {
 	char chClassName[48]; GetNativeString(1, chClassName, sizeof(chClassName));
 	
-	if (!IsValidWeaponClassName(chClassName)) {
-		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
-		return -1;
-	}
-	
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
 			return StringToInt(g_chWeaponInfo[iWeaponNum][CLIPAMMO]);
@@ -821,11 +842,6 @@ public int Native_GetWeaponReserveAmmoByDefIndex(Handle hPlugin, int iNumParams)
 public int Native_GetWeaponReserveAmmoByClassName(Handle hPlugin, int iNumParams)
 {
 	char chClassName[48]; GetNativeString(1, chClassName, sizeof(chClassName));
-	
-	if (!IsValidWeaponClassName(chClassName)) {
-		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
-		return -1;
-	}
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
@@ -901,11 +917,6 @@ public int Native_GetWeaponNumByClassName(Handle hPlugin, int iNumParams)
 {
 	char chClassName[48]; GetNativeString(1, chClassName, sizeof(chClassName));
 	
-	if (!IsValidWeaponClassName(chClassName)) {
-		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
-		return -1;
-	}
-	
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
 			return iWeaponNum;
@@ -948,11 +959,6 @@ public int Native_GetWeaponDefIndexByWeaponNum(Handle hPlugin, int iNumParams) {
 public int Native_GetWeaponDefIndexByClassName(Handle hPlugin, int iNumParams)
 {
 	char chClassName[48]; GetNativeString(1, chClassName, sizeof(chClassName));
-	
-	if (!IsValidWeaponClassName(chClassName)) {
-		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
-		return -1;
-	}
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
@@ -1036,11 +1042,6 @@ public int Native_GetMusicKitDisplayNameByDefIndex(Handle hPlugin, int iNumParam
 public int Native_GetWeaponDisplayNameByClassName(Handle hPlugin, int iNumParams)
 {
 	char chClassName[48]; GetNativeString(1, chClassName, sizeof(chClassName));
-	
-	if (!IsValidWeaponClassName(chClassName)) {
-		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
-		return false;
-	}
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
@@ -1170,11 +1171,6 @@ public int Native_GetWeaponSlotByClassName(Handle hPlugin, int iNumParams)
 {
 	char chClassName[48]; GetNativeString(1, chClassName, sizeof(chClassName));
 	
-	if (!IsValidWeaponClassName(chClassName)) {
-		ThrowNativeError(SP_ERROR_ARRAY_BOUNDS, "Weapon ClassName %s is invalid.", chClassName);
-		return -1;
-	}
-	
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
 			return SlotNameToNum(g_chWeaponInfo[iWeaponNum][SLOT]);
@@ -1222,7 +1218,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	int iClipAmmo = GetNativeCell(4);
 	int iSwitchTo = GetNativeCell(5);
 	
-	if(g_bClientEquipping[iClient] || g_bGivingWeapon[iClient]) {
+	if (g_bClientEquipping[iClient] || g_bGivingWeapon[iClient]) {
 		return -1;
 	}
 	
@@ -1264,7 +1260,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	char chCurrentClassName[48];
 	
 	if (CSGOItems_IsValidWeapon(iCurrentWeapon)) {
-		if(g_bWeaponEquipping[iCurrentWeapon]) {
+		if (g_bWeaponEquipping[iCurrentWeapon]) {
 			return -1;
 		}
 		
@@ -1307,7 +1303,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	
 	int iWeapon = GivePlayerItem(iClient, chClassName);
 	
-	if(CSGOItems_IsValidWeapon(iWeapon)) {
+	if (CSGOItems_IsValidWeapon(iWeapon)) {
 		g_bGivingWeapon[iClient] = false;
 	} else {
 		return -1;
@@ -1427,7 +1423,7 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 		return false;
 	}
 	
-	if(g_bClientEquipping[iClient] || g_bWeaponEquipping[iWeapon]) {
+	if (g_bClientEquipping[iClient] || g_bWeaponEquipping[iWeapon]) {
 		return false;
 	}
 	
@@ -1486,7 +1482,7 @@ public int Native_RemoveKnife(Handle hPlugin, int iNumParams)
 {
 	int iClient = GetNativeCell(1);
 	
-	LoopValidWeapons(iWeapon) {
+	CSGOItems_LoopValidWeapons(iWeapon) {
 		if (GetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity") != iClient) {
 			continue;
 		}
@@ -1501,4 +1497,33 @@ public int Native_RemoveKnife(Handle hPlugin, int iNumParams)
 	}
 	
 	return false;
+}
+
+public int Native_SetAllWeaponsAmmo(Handle hPlugin, int iNumParams)
+{
+	char chClassName[48]; char chBuffer[48]; GetNativeString(1, chClassName, sizeof(chClassName));
+	int iReserveAmmo = GetNativeCell(2);
+	int iClipAmmo = GetNativeCell(3);
+	
+	CSGOItems_LoopValidWeapons(iWeapon) {
+		CSGOItems_GetWeaponClassNameByWeapon(iWeapon, chBuffer, 48);
+		
+		if (!StrEqual(chClassName, chBuffer, false)) {
+			continue;
+		}
+		
+		if (iReserveAmmo > -1) {
+			SetEntProp(iWeapon, Prop_Send, "m_iPrimaryReserveAmmoCount", iReserveAmmo);
+		}
+		
+		if (iClipAmmo > -1) {
+			SetEntProp(iWeapon, Prop_Send, "m_iClip1", iClipAmmo);
+		}
+	}
+}
+
+public int Native_GetRandomSkin(Handle hPlugin, int iNumParams)
+{
+	int iSkinNum = GetRandomInt(1, g_iPaintCount);
+	return StringToInt(g_chPaintInfo[iSkinNum][DEFINDEX]);
 } 

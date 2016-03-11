@@ -45,11 +45,13 @@ native int CSGOItems_GiveWeapon(int iClient, const char[] chClassName, int iRese
 native bool CSGOItems_RemoveKnife(int iClient);
 native bool CSGOItems_RemoveWeapon(int iClient, int iWeapon);
 native bool CSGOItems_SetWeaponAmmo(int iWeapon, int iReserveAmmo = -1, int iClipAmmo = -1);
+native int CSGOItems_SetAllWeaponsAmmo(int iWeapon, int iReserveAmmo = -1, int iClipAmmo = -1);
 native bool CSGOItems_SetActiveWeapon(int iClient, int iWeapon);
 native int CSGOItems_GetActiveWeaponSlot(int iClient);
 native bool CSGOItems_AreItemsSynced();
 native bool CSGOItems_AreItemsSyncing();
 native bool CSGOItems_ReSync();
+native int CSGOItems_GetRandomSkin();
 
 // SKINS
 native int CSGOItems_GetSkinNumByDefIndex(int iDefIndex);
