@@ -6,6 +6,7 @@
 native int CSGOItems_GetWeaponCount();
 native int CSGOItems_GetMusicKitCount();
 native int CSGOItems_GetSkinCount();
+native int CSGOItems_GetActiveWeaponCount(const char[] chClassName, int iTeam = 0);
 
 // WEAPONS
 native int CSGOItems_GetWeaponNumByDefIndex(int iDefIndex);
@@ -38,6 +39,9 @@ native int CSGOItems_GetWeaponClipAmmoByWeaponNum(int iWeaponNum);
 native int CSGOItems_GetWeaponReserveAmmoByDefIndex(int iDefIndex);
 native int CSGOItems_GetWeaponReserveAmmoByClassName(const char[] chClassName);
 native int CSGOItems_GetWeaponReserveAmmoByWeaponNum(int iWeaponNum);
+native int CSGOItems_GetWeaponKillAwardByDefIndex(int iDefIndex);
+native int CSGOItems_GetWeaponKillAwardByClassName(const char[] chClassName);
+native int CSGOItems_GetWeaponKillAwardByWeaponNum(int iWeaponNum);
 native bool CSGOItems_RefillClipAmmo(int iWeapon);
 native bool CSGOItems_RefillReserveAmmo(int iWeapon);
 native bool CSGOItems_IsValidWeapon(int iWeapon);
