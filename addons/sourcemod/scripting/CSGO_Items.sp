@@ -345,6 +345,9 @@ public bool RetrieveLanguage()
 		g_bLanguageDownloading = true;
 		g_iDownloadAttempts++;
 		return true;
+	} else {
+		CreateTimer(2.0, Timer_SyncLanguage, hRequest);
+		LogMessage("[WARNING] SteamWorks language retrieval failed, attempting to use old file (If one is available)");
 	}
 	
 	return false;
@@ -359,6 +362,8 @@ public int Language_Retrieved(Handle hRequest, bool bFailure, bool bRequestSucce
 			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "resource/csgo_english_utf8.txt");
 		}
 	}
+	
+	LogMessage("UTF-8 language file successfully retrieved.");
 	
 	CreateTimer(2.0, Timer_SyncLanguage, hRequest);
 }
