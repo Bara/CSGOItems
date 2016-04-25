@@ -1418,7 +1418,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		g_bGivingWeapon[iClient] = false;
 		
 		if(iWeapon != -1 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
-			RemovePlayerItem(iWeapon);
+			RemovePlayerItem(iClient, iWeapon);
 			AcceptEntityInput(iWeapon, "Kill");
 		}
 		
