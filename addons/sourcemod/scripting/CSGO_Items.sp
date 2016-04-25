@@ -1417,7 +1417,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	if (!CSGOItems_IsValidWeapon(iWeapon)) {
 		g_bGivingWeapon[iClient] = false;
 		
-		if(iWeapon >= -1) {
+		if(iWeapon != -1 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
 			RemovePlayerItem(iWeapon);
 			AcceptEntityInput(iWeapon, "Kill");
 		}
