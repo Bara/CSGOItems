@@ -1368,8 +1368,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	char chCurrentClassName[48];
 	
 	if (CSGOItems_IsValidWeapon(iCurrentWeapon)) {
-		
-		if (g_bWeaponEquipping[iCurrentWeapon] || iCurrentWeapon <= -1) {
+		if (g_bWeaponEquipping[iCurrentWeapon]) {
 			g_bGivingWeapon[iClient] = false;
 			return -1;
 		}
@@ -1417,6 +1416,12 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	
 	if (!CSGOItems_IsValidWeapon(iWeapon)) {
 		g_bGivingWeapon[iClient] = false;
+		
+		if(iWeapon >= -1) {
+			RemovePlayerItem(iWeapon);
+			AcceptEntityInput(iWeapon, "Kill");
+		}
+		
 		return -1;
 	}
 	
