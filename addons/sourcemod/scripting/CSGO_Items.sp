@@ -85,6 +85,8 @@ CHANGELOG
 			
 			- Fixed some logic errors with variables / loops.
 			- Fixed a rare issue where CSGOItems_GiveWeapon would fail when it shouldn't of.
+		1.0 ~
+			- New method for Removing player weapons, this should fix some crashes!
 									
 									
 ****************************************************************************************************
@@ -100,7 +102,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "0.9"
+#define VERSION "1.0"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -1418,8 +1420,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		g_bGivingWeapon[iClient] = false;
 		
 		if(iWeapon != -1 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
-			RemovePlayerItem(iClient, iWeapon);
-			AcceptEntityInput(iWeapon, "Kill");
+			CSGOItems_RemoveWeapon(iClient, iWeapon);
 		}
 		
 		return -1;
@@ -1545,8 +1546,16 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 		return false;
 	}
 	
-	if (!RemovePlayerItem(iClient, iWeapon)) {
-		return false;
+	int iOwnerEntity = GetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity");
+	
+	if (iOwnerEntity != iClient) {
+		SetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity", iClient);
+	}
+	
+	SDKHooks_DropWeapon(iClient, iWeapon, NULL_VECTOR, NULL_VECTOR);
+	
+	if (iOwnerEntity != -1) {
+		SetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity", iOwnerEntity);
 	}
 	
 	return AcceptEntityInput(iWeapon, "Kill");
