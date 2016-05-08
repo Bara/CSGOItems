@@ -87,8 +87,22 @@ CHANGELOG
 			- Fixed a rare issue where CSGOItems_GiveWeapon would fail when it shouldn't of.
 		1.0 ~
 			- New method for Removing player weapons, this should fix some crashes!
-									
-									
+		
+		1.0.1 ~
+			- Added CSGOItems_RemoveAllWeapons
+					This function will safely remove all the weapons a client has got equipped, with an option to skip a certain slot.
+					
+					Example 1, Remove all clients weapons.
+							CSGOItems_RemoveAllWeapons(iClient);
+					
+					Example 2, Remove all clients weapons but leave the knife slot.
+							CSGOItems_RemoveAllWeapons(iClient, CS_SLOT_KNIFE);
+							
+					Return: Number of weapons sucessfully removed from client.
+					
+			- Implemented Bacardi's weapon looping, Very nice, credits to him! (This is a lot safer and more efficient than my old method.)
+			- Added an extra validation check before removing client weapons.
+
 ****************************************************************************************************
 INCLUDES
 ***************************************************************************************************/
@@ -102,7 +116,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.0"
+#define VERSION "1.0.1"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -294,6 +308,7 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] chError, int iEr
 	CreateNative("CSGOItems_IsValidWeapon", Native_IsValidWeapon);
 	CreateNative("CSGOItems_GiveWeapon", Native_GiveWeapon);
 	CreateNative("CSGOItems_RemoveWeapon", Native_RemoveWeapon);
+	CreateNative("CSGOItems_RemoveAllWeapons", Native_RemoveAllWeapons);
 	CreateNative("CSGOItems_RemoveKnife", Native_RemoveKnife);
 	CreateNative("CSGOItems_SetActiveWeapon", Native_SetActiveWeapon);
 	CreateNative("CSGOItems_GetActiveWeaponSlot", Native_GetActiveWeaponSlot);
@@ -728,7 +743,7 @@ stock void GetWeaponClip(char[] chClassName, char[] chReturn, int iLength)
 
 stock bool GetWeaponKillAward(char[] chClassName, char[] chReturn, int iLength)
 {
-	char chBuffer[128]; 
+	char chBuffer[128];
 	
 	if (CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByClassName(chClassName))) {
 		Format(chBuffer, 64, "scripts/weapon_knife.txt", chClassName);
@@ -1171,7 +1186,7 @@ public int Native_GetMusicKitDisplayNameByMusicKitNum(Handle hPlugin, int iNumPa
 public int Native_IsDefIndexKnife(Handle hPlugin, int iNumParams) {
 	int iDefIndex = GetNativeCell(1);
 	
-	if(iDefIndex <= -1 || iDefIndex > 600) {
+	if (iDefIndex <= -1 || iDefIndex > 600) {
 		return false;
 	}
 	
@@ -1236,8 +1251,10 @@ public int Native_FindWeaponByClassName(Handle hPlugin, int iNumParams)
 	char chClassName[48]; GetNativeString(2, chClassName, sizeof(chClassName));
 	char chBuffer[48];
 	
-	CSGOItems_LoopWeaponSlots(iSlot) {
-		int iWeapon = GetPlayerWeaponSlot(iClient, iSlot);
+	int iWeaponArraySize = GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons");
+	
+	for (int i = 0; i < iWeaponArraySize; i++) {
+		int iWeapon = GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i);
 		
 		if (!CSGOItems_IsValidWeapon(iWeapon)) {
 			continue;
@@ -1321,7 +1338,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	int iClipAmmo = GetNativeCell(4);
 	int iSwitchTo = GetNativeCell(5);
 	
-	if(g_bGivingWeapon[iClient]) {
+	if (g_bGivingWeapon[iClient]) {
 		return -1;
 	}
 	
@@ -1419,7 +1436,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	if (!CSGOItems_IsValidWeapon(iWeapon)) {
 		g_bGivingWeapon[iClient] = false;
 		
-		if(iWeapon != -1 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
+		if (iWeapon != -1 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
 			CSGOItems_RemoveWeapon(iClient, iWeapon);
 		}
 		
@@ -1542,7 +1559,7 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 		return false;
 	}
 	
-	if (g_bClientEquipping[iClient] || g_bWeaponEquipping[iWeapon]) {
+	if (g_bClientEquipping[iClient] || g_bWeaponEquipping[iWeapon] || GetEntSendPropOffs(iWeapon, "m_bStartedArming") != -1) {
 		return false;
 	}
 	
@@ -1559,6 +1576,35 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 	}
 	
 	return AcceptEntityInput(iWeapon, "Kill");
+}
+
+public int Native_RemoveAllWeapons(Handle hPlugin, int iNumParams)
+{
+	int iClient = GetNativeCell(1);
+	int iSkipSlot = GetNativeCell(2);
+	
+	int iRemovedWeapons = 0;
+	int iWeaponArraySize = GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons");
+	
+	for (int i = 0; i < iWeaponArraySize; i++) {
+		int iWeapon = GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i);
+		
+		if (!CSGOItems_IsValidWeapon(iWeapon)) {
+			continue;
+		}
+		
+		int iDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
+		
+		if (CSGOItems_GetWeaponSlotByDefIndex(iDefIndex) == iSkipSlot && iSkipSlot != -1) {
+			continue;
+		}
+		
+		if (CSGOItems_RemoveWeapon(iClient, iWeapon)) {
+			iRemovedWeapons++;
+		}
+	}
+	
+	return iRemovedWeapons;
 }
 
 public int Native_SetActiveWeapon(Handle hPlugin, int iNumParams)
@@ -1609,8 +1655,12 @@ public int Native_RemoveKnife(Handle hPlugin, int iNumParams)
 {
 	int iClient = GetNativeCell(1);
 	
-	CSGOItems_LoopValidWeapons(iWeapon) {
-		if (GetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity") != iClient) {
+	int iWeaponArraySize = GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons");
+	
+	for (int i = 0; i < iWeaponArraySize; i++) {
+		int iWeapon = GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i);
+		
+		if (!CSGOItems_IsValidWeapon(iWeapon)) {
 			continue;
 		}
 		
