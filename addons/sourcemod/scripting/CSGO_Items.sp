@@ -102,7 +102,10 @@ CHANGELOG
 					
 			- Implemented Bacardi's weapon looping, Very nice, credits to him! (This is a lot safer and more efficient than my old method.)
 			- Added an extra validation check before removing client weapons.
-
+		1.1 ~
+			- Fixed a bug when retrieving Language would not automatically rename the newly retrieved file.
+			- Implemented a new API which retrieves a fixed version of the Item schema which can be iterated without issues, (Thanks Valve, you forced me to spend a day coding in PHP)
+			
 ****************************************************************************************************
 INCLUDES
 ***************************************************************************************************/
@@ -116,7 +119,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.0.1"
+#define VERSION "1.1"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -128,6 +131,7 @@ DEFINES
 #define 	TYPE 			7
 #define 	KILLAWARD 		8
 #define 	LANGURL         "https://raw.githubusercontent.com/SteamDatabase/GameTracking/master/csgo/csgo/resource/csgo_english_utf8.txt"
+#define 	SCHEMAURL         "https://fragdeluxe.com/api/csgo_schema.php"
 
 /****************************************************************************************************
 ETIQUETTE.
@@ -162,6 +166,7 @@ bool g_bIsDefIndexSkinnable[600];
 bool g_bItemsSynced;
 bool g_bItemsSyncing;
 bool g_bLanguageDownloading;
+bool g_bSchemaDownloading;
 bool g_bClientEquipping[MAXPLAYERS + 1];
 bool g_bGivingWeapon[MAXPLAYERS + 1];
 bool g_bWeaponEquipping[2049];
@@ -172,6 +177,7 @@ char g_chWeaponInfo[100][9][48];
 char g_chPaintInfo[600][3][48];
 char g_chMusicKitInfo[100][3][48];
 char g_chLangPhrases[2198296];
+char g_chSchemaPhrases[2198296];
 
 static char g_chViewSequence1[][] =  {
 	"weapon_knife_falchion", "weapon_knife_push", 
@@ -184,7 +190,8 @@ INTS.
 int g_iPaintCount = 0;
 int g_iWeaponCount = 0;
 int g_iMusicKitCount = 0;
-int g_iDownloadAttempts = 0;
+int g_iLanguageDownloadAttempts = 0;
+int g_iSchemaDownloadAttempts = 0;
 
 #define CSGOItems_LoopWeapons(%1) for(int %1 = 0; %1 < g_iWeaponCount; %1++)
 #define CSGOItems_LoopSkins(%1) for(int %1 = 0; %1 < g_iPaintCount; %1++)
@@ -358,13 +365,17 @@ public bool RetrieveLanguage()
 	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Cache-Control", "no-cache");
 	SteamWorks_SetHTTPCallbacks(hRequest, Language_Retrieved);
 	
-	if (SteamWorks_SendHTTPRequest(hRequest)) {
+	if (SteamWorks_SendHTTPRequest(hRequest) && hRequest != null) {
 		g_bLanguageDownloading = true;
-		g_iDownloadAttempts++;
+		g_iLanguageDownloadAttempts++;
 		return true;
 	} else {
 		CreateTimer(2.0, Timer_SyncLanguage, hRequest);
 		LogMessage("[WARNING] SteamWorks language retrieval failed, attempting to use old file (If one is available)");
+		
+		if (hRequest != null) {
+			CloseHandle(hRequest);
+		}
 	}
 	
 	return false;
@@ -382,7 +393,7 @@ public int Language_Retrieved(Handle hRequest, bool bFailure, bool bRequestSucce
 	
 	LogMessage("UTF-8 language file successfully retrieved.");
 	
-	CreateTimer(2.0, Timer_SyncLanguage, hRequest);
+	CreateTimer(1.0, Timer_SyncLanguage, hRequest);
 }
 
 public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
@@ -391,11 +402,25 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 	Handle hLanguageFileNew = OpenFile("resource/csgo_english_utf8_new.txt", "r");
 	
 	if (hLanguageFileNew != null && ReadFileString(hLanguageFileNew, g_chLangPhrases, 2198296) && StrContains(g_chLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
+		if (hLanguageFile != null) {
+			CloseHandle(hLanguageFile);
+			hLanguageFile = null;
+		}
+		
+		CloseHandle(hLanguageFileNew); hLanguageFileNew = null;
+		
 		DeleteFile("resource/csgo_english_utf8.txt");
 		RenameFile("resource/csgo_english_utf8.txt", "resource/csgo_english_utf8_new.txt");
 	}
 	
 	else if (hLanguageFile != null && ReadFileString(hLanguageFile, g_chLangPhrases, 2198296) && StrContains(g_chLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
+		if (hLanguageFileNew != null) {
+			CloseHandle(hLanguageFileNew);
+			hLanguageFileNew = null;
+		}
+		
+		CloseHandle(hLanguageFile); hLanguageFile = null;
+		
 		DeleteFile("resource/csgo_english_utf8_new.txt");
 	}
 	else {
@@ -415,13 +440,13 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 		
 		DeleteFile("resource/csgo_english_utf8.txt"); DeleteFile("resource/csgo_english_utf8_new.txt");
 		
-		if (g_iDownloadAttempts < 10) {
+		if (g_iLanguageDownloadAttempts < 10) {
 			RetrieveLanguage();
 			return Plugin_Stop;
 		} else {
 			Call_StartForward(g_hOnPluginEnd);
 			Call_Finish();
-			SetFailState("UTF-8 language file is corrupted, failed after %d attempts. \nCheck: %s", g_iDownloadAttempts, LANGURL);
+			SetFailState("UTF-8 language file is corrupted, failed after %d attempts. \nCheck: %s", g_iLanguageDownloadAttempts, LANGURL);
 		}
 	}
 	
@@ -438,12 +463,127 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 	}
 	
 	g_bLanguageDownloading = false;
-	g_iDownloadAttempts = 0;
-	LogMessage("UTF-8 language file successfully processed, starting item data synchronization.");
+	g_iLanguageDownloadAttempts = 0;
+	LogMessage("UTF-8 language file successfully processed, retrieving item schema.");
 	
 	if (!g_bItemsSyncing) {
-		SyncItemData();
+		RetrieveItemSchema();
 	}
+	
+	return Plugin_Stop;
+}
+
+public bool RetrieveItemSchema()
+{
+	if (g_bItemsSyncing || g_bSchemaDownloading) {
+		return false;
+	}
+	
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, SCHEMAURL);
+	
+	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Pragma", "no-cache");
+	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Cache-Control", "no-cache");
+	SteamWorks_SetHTTPCallbacks(hRequest, Schema_Retrieved);
+	
+	if (SteamWorks_SendHTTPRequest(hRequest) && hRequest != null) {
+		g_bSchemaDownloading = true;
+		g_iSchemaDownloadAttempts++;
+		return true;
+	} else {
+		CreateTimer(2.0, Timer_SyncSchema, hRequest);
+		LogMessage("[WARNING] SteamWorks schema retrieval failed, attempting to use old file (If one is available)");
+	}
+	
+	return false;
+}
+
+public int Schema_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything)
+{
+	if (bRequestSuccessful && eStatusCode == k_EHTTPStatusCode200OK) {
+		if (FileExists("scripts/items/items_game_fixed.txt")) {
+			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "scripts/items/items_game_fixed_new.txt");
+		} else {
+			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "scripts/items/items_game_fixed.txt");
+		}
+	}
+	
+	LogMessage("Item Schema successfully retrieved.");
+	
+	CreateTimer(1.0, Timer_SyncSchema, hRequest);
+}
+
+public Action Timer_SyncSchema(Handle hTimer, Handle hRequest)
+{
+	Handle hSchemaFile = OpenFile("scripts/items/items_game_fixed.txt", "r");
+	Handle hSchemaFileNew = OpenFile("scripts/items/items_game_fixed_new.txt", "r");
+	
+	if (hSchemaFileNew != null && ReadFileString(hSchemaFileNew, g_chSchemaPhrases, 2198296) && StrContains(g_chSchemaPhrases, "\"items_game\"") != -1) {
+		if (hSchemaFile != null) {
+			CloseHandle(hSchemaFile);
+			hSchemaFile = null;
+		}
+		
+		CloseHandle(hSchemaFileNew); hSchemaFileNew = null;
+		
+		DeleteFile("scripts/items/items_game_fixed.txt");
+		RenameFile("scripts/items/items_game_fixed.txt", "scripts/items/items_game_fixed_new.txt");
+	}
+	
+	else if (hSchemaFile != null && ReadFileString(hSchemaFile, g_chSchemaPhrases, 2198296) && StrContains(g_chSchemaPhrases, "\"items_game\"") != -1) {
+		if (hSchemaFileNew != null) {
+			CloseHandle(hSchemaFileNew);
+			hSchemaFileNew = null;
+		}
+		
+		CloseHandle(hSchemaFile); hSchemaFile = null;
+		
+		DeleteFile("scripts/items/items_game_fixed_new.txt");
+	}
+	else {
+		g_bItemsSyncing = false;
+		
+		if (hRequest != null) {
+			CloseHandle(hRequest);
+		}
+		
+		if (hSchemaFile != null) {
+			CloseHandle(hSchemaFile);
+		}
+		
+		if (hSchemaFileNew != null) {
+			CloseHandle(hSchemaFileNew);
+		}
+		
+		DeleteFile("scripts/items/items_game_fixed.txt"); DeleteFile("scripts/items/items_game_fixed_new.txt");
+		
+		if (g_iSchemaDownloadAttempts < 10) {
+			RetrieveItemSchema();
+			return Plugin_Stop;
+		} else {
+			Call_StartForward(g_hOnPluginEnd);
+			Call_Finish();
+			SetFailState("Item schema is corrupted, failed after %d attempts. \nCheck: %s", g_iSchemaDownloadAttempts, SCHEMAURL);
+		}
+	}
+	
+	if (hRequest != null) {
+		CloseHandle(hRequest);
+	}
+	
+	if (hSchemaFile != null) {
+		CloseHandle(hSchemaFile);
+	}
+	
+	if (hSchemaFileNew != null) {
+		CloseHandle(hSchemaFileNew);
+	}
+	
+	g_bSchemaDownloading = false;
+	g_iSchemaDownloadAttempts = 0;
+	
+	LogMessage("Item Schema successfully processed, syncing item data.");
+	
+	SyncItemData();
 	
 	return Plugin_Stop;
 }
@@ -451,17 +591,17 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 public void SyncItemData()
 {
 	g_bItemsSyncing = true;
-	
 	g_iPaintCount = 0;
 	g_iWeaponCount = 0;
 	g_iMusicKitCount = 0;
 	
 	g_hItemsKv = CreateKeyValues("items_game");
 	
-	if (!FileToKeyValues(g_hItemsKv, "scripts/items/items_game.txt")) {
+	if (!FileToKeyValues(g_hItemsKv, "scripts/items/items_game_fixed.txt")) {
 		Call_StartForward(g_hOnPluginEnd);
 		Call_Finish();
-		SetFailState("Unable to Read/Open items_game.txt");
+		LogError("Unable to Process Item Schema");
+		SetFailState("Unable to Process Item Schema");
 	}
 	
 	KvRewind(g_hItemsKv);
@@ -469,8 +609,10 @@ public void SyncItemData()
 	if (!KvJumpToKey(g_hItemsKv, "items") || !KvGotoFirstSubKey(g_hItemsKv, false)) {
 		Call_StartForward(g_hOnPluginEnd);
 		Call_Finish();
+		LogError("Unable to find Item keyvalues");
 		SetFailState("Unable to find Item keyvalues");
 	}
+	
 	
 	char chBuffer[48]; char chBuffer2[48];
 	
@@ -645,6 +787,7 @@ public void SyncItemData()
 	KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv);
 	
 	CloseHandle(g_hItemsKv);
+	
 	Call_StartForward(g_hOnItemsSynced);
 	Call_Finish();
 	
@@ -1437,7 +1580,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		g_bGivingWeapon[iClient] = false;
 		
 		if (iWeapon != -1 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
-			CSGOItems_RemoveWeapon(iClient, iWeapon);
+			AcceptEntityInput(iWeapon, "Kill");
 		}
 		
 		return -1;
@@ -1594,8 +1737,9 @@ public int Native_RemoveAllWeapons(Handle hPlugin, int iNumParams)
 		}
 		
 		int iDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
+		int iWeaponSlot = CSGOItems_GetWeaponSlotByDefIndex(iDefIndex);
 		
-		if (CSGOItems_GetWeaponSlotByDefIndex(iDefIndex) == iSkipSlot && iSkipSlot != -1) {
+		if (iWeaponSlot == iSkipSlot && iSkipSlot != -1) {
 			continue;
 		}
 		
