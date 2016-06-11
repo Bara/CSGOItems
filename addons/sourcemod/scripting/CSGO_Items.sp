@@ -105,6 +105,9 @@ CHANGELOG
 		1.1 ~
 			- Fixed a bug when retrieving Language would not automatically rename the newly retrieved file.
 			- Implemented a new API which retrieves a fixed version of the Item schema which can be iterated without issues, (Thanks Valve, you forced me to spend a day coding in PHP)
+		1.2 ~
+			- Updated item schema url.
+			- Improved validation before removing weapons now.
 			
 ****************************************************************************************************
 INCLUDES
@@ -119,7 +122,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.1"
+#define VERSION "1.2"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -131,7 +134,7 @@ DEFINES
 #define 	TYPE 			7
 #define 	KILLAWARD 		8
 #define 	LANGURL         "https://raw.githubusercontent.com/SteamDatabase/GameTracking/master/csgo/csgo/resource/csgo_english_utf8.txt"
-#define 	SCHEMAURL         "https://fragdeluxe.com/api/csgo_schema.php"
+#define 	SCHEMAURL         "http://api.fragdeluxe.com/itemdata/csgo_schema.php"
 
 /****************************************************************************************************
 ETIQUETTE.
@@ -773,7 +776,9 @@ public void SyncItemData()
 	}
 	
 	do {
-		KvGetSectionName(g_hItemsKv, chBuffer, 48); int iMusicDefIndex = StringToInt(chBuffer);
+		KvGetSectionName(g_hItemsKv, chBuffer, 48);
+		int iMusicDefIndex = StringToInt(chBuffer);
+		
 		if (iMusicDefIndex > 2) {
 			strcopy(g_chMusicKitInfo[g_iMusicKitCount][DEFINDEX], 48, chBuffer);
 			KvGetString(g_hItemsKv, "loc_name", chBuffer2, 48);
@@ -1481,28 +1486,15 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	int iClipAmmo = GetNativeCell(4);
 	int iSwitchTo = GetNativeCell(5);
 	
-	if (g_bGivingWeapon[iClient]) {
-		return -1;
-	}
-	
-	if (g_bClientEquipping[iClient]) {
-		g_bGivingWeapon[iClient] = false;
-		return -1;
-	}
-	
-	g_bGivingWeapon[iClient] = true;
-	
 	int iClientTeam = GetClientTeam(iClient);
 	
 	if (iClientTeam < 2 || !IsPlayerAlive(iClient)) {
-		g_bGivingWeapon[iClient] = false;
 		return -1;
 	}
 	
 	int iViewSequence = GetEntProp(GetEntPropEnt(iClient, Prop_Send, "m_hViewModel"), Prop_Send, "m_nSequence");
 	
 	if (!IsValidWeaponClassName(chClassName)) {
-		g_bGivingWeapon[iClient] = false;
 		return -1;
 	}
 	
@@ -1530,11 +1522,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	char chCurrentClassName[48];
 	
 	if (CSGOItems_IsValidWeapon(iCurrentWeapon)) {
-		if (g_bWeaponEquipping[iCurrentWeapon]) {
-			g_bGivingWeapon[iClient] = false;
-			return -1;
-		}
-		
 		CSGOItems_GetWeaponClassNameByWeapon(iCurrentWeapon, chCurrentClassName, 48);
 		iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iCurrentWeapon);
 		
@@ -1573,6 +1560,8 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	if (iSwitchTo == -1 && GetPlayerWeaponSlot(iClient, CS_SLOT_PRIMARY) == -1 && CSGOItems_GetWeaponSlotByClassName(chClassName) == CS_SLOT_PRIMARY) {
 		iSwitchTo = CS_SLOT_PRIMARY;
 	}
+	
+	g_bGivingWeapon[iClient] = true;
 	
 	int iWeapon = GivePlayerItem(iClient, chClassName);
 	
@@ -1702,21 +1691,23 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 		return false;
 	}
 	
-	if (g_bClientEquipping[iClient] || g_bWeaponEquipping[iWeapon] || GetEntSendPropOffs(iWeapon, "m_bStartedArming") != -1) {
+	if (g_bGivingWeapon[iClient] || g_bClientEquipping[iClient] || g_bWeaponEquipping[iWeapon]) {
 		return false;
 	}
 	
-	int iOwnerEntity = GetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity");
-	
-	if (iOwnerEntity != iClient) {
-		SetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity", iClient);
+	if (GetEntProp(iWeapon, Prop_Send, "m_bInitialized") == 0 || GetEntSendPropOffs(iWeapon, "m_bStartedArming") != -1) {
+		return false;
 	}
 	
+	int iDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
+	int iWeaponSlot = CSGOItems_GetWeaponSlotByDefIndex(iDefIndex);
+	
+	if (GetPlayerWeaponSlot(iClient, iWeaponSlot) != iWeapon) {
+		return false;
+	}
+	
+	SetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity", iClient);
 	SDKHooks_DropWeapon(iClient, iWeapon, NULL_VECTOR, NULL_VECTOR);
-	
-	if (iOwnerEntity != -1) {
-		SetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity", iOwnerEntity);
-	}
 	
 	return AcceptEntityInput(iWeapon, "Kill");
 }
