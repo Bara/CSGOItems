@@ -132,6 +132,10 @@ CHANGELOG
 		1.3.2 ~
 			- Added CSGOItems_GetWeaponSpread natives.
 					These natives will return the spread value as a float.
+		1.3.3 ~
+			- Added CSGOItems_GetWeaponCycleTime natives.
+					These natives will return the spread value as a float.
+			- Fixed tag mismatches in new natives.
 			
 ****************************************************************************************************
 INCLUDES
@@ -147,7 +151,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.3.2"
+#define VERSION "1.3.3"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -167,6 +171,7 @@ DEFINES
 #define     VIEWMATERIAL	15
 #define     WORLDMATERIAL	16
 #define     SPREAD			17
+#define     CYCLETIME		18
 
 #define 	LANGURL         "https://raw.githubusercontent.com/SteamDatabase/GameTracking/master/csgo/csgo/resource/csgo_english_utf8.txt"
 #define 	SCHEMAURL         "http://api.fragdeluxe.com/itemdata/csgo_schema.php"
@@ -368,6 +373,11 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] chError, int iEr
 	CreateNative("CSGOItems_GetWeaponSpreadByDefIndex", Native_GetWeaponSpreadByDefIndex);
 	CreateNative("CSGOItems_GetWeaponSpreadByClassName", Native_GetWeaponSpreadByClassName);
 	CreateNative("CSGOItems_GetWeaponSpreadByWeaponNum", Native_GetWeaponSpreadByWeaponNum);
+	
+	// Weapon Cycle Time
+	CreateNative("CSGOItems_GetWeaponCycleTimeByDefIndex", Native_GetWeaponCycleTimeByDefIndex);
+	CreateNative("CSGOItems_GetWeaponCycleTimeByClassName", Native_GetWeaponCycleTimeByClassName);
+	CreateNative("CSGOItems_GetWeaponCycleTimeByWeaponNum", Native_GetWeaponCycleTimeByWeaponNum);
 	
 	// Misc
 	CreateNative("CSGOItems_IsDefIndexKnife", Native_IsDefIndexKnife);
@@ -727,6 +737,13 @@ public void SyncItemData()
 			fSpread = StringToFloat(g_chWeaponInfo[g_iWeaponCount][SPREAD]);
 		}
 		
+		float fCycleTime = 0.0;
+		bool bCycleTimeFound = GetWeaponCycleTime(g_chWeaponInfo[g_iWeaponCount][CLASSNAME], g_chWeaponInfo[g_iWeaponCount][CYCLETIME], 48);
+		
+		if(bCycleTimeFound) {
+			fCycleTime = StringToFloat(g_chWeaponInfo[g_iWeaponCount][CYCLETIME]);
+		}
+		
 		if (IsSpecialPrefab(chBuffer)) {
 			KvGetString(g_hItemsKv, "item_name", chBuffer, 48);
 			KvGetString(g_hItemsKv, "model_player", g_chWeaponInfo[g_iWeaponCount][VIEWMODEL], 48);
@@ -779,6 +796,10 @@ public void SyncItemData()
 						fSpread = KvGetFloat(g_hItemsKv, "spread", 0.0);
 					}
 					
+					if(fCycleTime <= 0.0 || !bCycleTimeFound) {
+						fCycleTime = KvGetFloat(g_hItemsKv, "cycletime", 0.0);
+					}
+					
 					if (iClipAmmo > 0) {
 						IntToString(iClipAmmo, g_chWeaponInfo[g_iWeaponCount][CLIPAMMO], 48);
 					} else {
@@ -807,6 +828,12 @@ public void SyncItemData()
 			FloatToString(0.0, g_chWeaponInfo[g_iWeaponCount][SPREAD], 48);
 		} else {
 			FloatToString(fSpread, g_chWeaponInfo[g_iWeaponCount][SPREAD], 48);
+		}
+		
+		if(fCycleTime <= 0.0) {
+			FloatToString(0.0, g_chWeaponInfo[g_iWeaponCount][CYCLETIME], 48);
+		} else {
+			FloatToString(fCycleTime, g_chWeaponInfo[g_iWeaponCount][CYCLETIME], 48);
 		}
 		
 		if (StrEqual(g_chWeaponInfo[g_iWeaponCount][CLIPAMMO], "", false)) {
@@ -1048,7 +1075,7 @@ stock bool GetWeaponSpread(char[] chClassName, char[] chReturn, int iLength)
 	Handle hFile = OpenFile(chBuffer, "r");
 	
 	if (hFile == null) {
-		strcopy(chReturn, iLength, "-1");
+		strcopy(chReturn, iLength, "0.0");
 		return false;
 	}
 	
@@ -1062,7 +1089,7 @@ stock bool GetWeaponSpread(char[] chClassName, char[] chReturn, int iLength)
 	}
 	
 	if (StrEqual(chReturn, "", false) || StrEqual(chReturn, "0", false)) {
-		strcopy(chReturn, iLength, "-1");
+		strcopy(chReturn, iLength, "0.0");
 		return false;
 	}
 	
@@ -1070,6 +1097,40 @@ stock bool GetWeaponSpread(char[] chClassName, char[] chReturn, int iLength)
 	return true;
 }
 
+stock bool GetWeaponCycleTime(char[] chClassName, char[] chReturn, int iLength)
+{
+	char chBuffer[128];
+	
+	if (CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByClassName(chClassName))) {
+		Format(chBuffer, 64, "scripts/weapon_knife.txt", chClassName);
+	} else {
+		Format(chBuffer, 64, "scripts/%s.txt", chClassName);
+	}
+	
+	Handle hFile = OpenFile(chBuffer, "r");
+	
+	if (hFile == null) {
+		strcopy(chReturn, iLength, "0.0");
+		return false;
+	}
+	
+	while (ReadFileLine(hFile, chBuffer, 128) && !IsEndOfFile(hFile)) {
+		if (StrContains(chBuffer, "CycleTime", false) != -1 && StrContains(chBuffer, "TimeToIdle", false) == -1) {
+			ReplaceString(chBuffer, 128, "CycleTime", "", false); ReplaceString(chBuffer, 128, "\"", "", false);
+			TrimString(chBuffer); StripQuotes(chBuffer);
+			strcopy(chReturn, iLength, chBuffer);
+			break;
+		}
+	}
+	
+	if (StrEqual(chReturn, "", false) || StrEqual(chReturn, "0", false)) {
+		strcopy(chReturn, iLength, "0.0");
+		return false;
+	}
+	
+	CloseHandle(hFile);
+	return true;
+}
 
 stock bool IsValidWeaponClassName(char[] chClassName)
 {
@@ -1303,11 +1364,11 @@ public int Native_GetWeaponSpreadByDefIndex(Handle hPlugin, int iNumParams)
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StringToInt(g_chWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-			return StringToFloat(g_chWeaponInfo[iWeaponNum][SPREAD]);
+			return view_as<int>(StringToFloat(g_chWeaponInfo[iWeaponNum][SPREAD]));
 		}
 	}
 	
-	return -1;
+	return view_as<int>(0.0);
 }
 
 public int Native_GetWeaponSpreadByClassName(Handle hPlugin, int iNumParams)
@@ -1316,15 +1377,45 @@ public int Native_GetWeaponSpreadByClassName(Handle hPlugin, int iNumParams)
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
-			return StringToFloat(g_chWeaponInfo[iWeaponNum][SPREAD]);
+			return view_as<int>(StringToFloat(g_chWeaponInfo[iWeaponNum][SPREAD]));
 		}
 	}
 	
-	return -1;
+	return view_as<int>(0.0);
 }
 
 public int Native_GetWeaponSpreadByWeaponNum(Handle hPlugin, int iNumParams) {
-	return StringToFloat(g_chWeaponInfo[GetNativeCell(1)][SPREAD]);
+	return view_as<int>(StringToFloat(g_chWeaponInfo[GetNativeCell(1)][SPREAD]));
+}
+
+public int Native_GetWeaponCycleTimeByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_chWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return view_as<int>(StringToFloat(g_chWeaponInfo[iWeaponNum][CYCLETIME]));
+		}
+	}
+	
+	return view_as<int>(0.0);
+}
+
+public int Native_GetWeaponCycleTimeByClassName(Handle hPlugin, int iNumParams)
+{
+	char chClassName[48]; GetNativeString(1, chClassName, sizeof(chClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_chWeaponInfo[iWeaponNum][CLASSNAME], chClassName, false)) {
+			return view_as<int>(StringToFloat(g_chWeaponInfo[iWeaponNum][CYCLETIME]));
+		}
+	}
+	
+	return view_as<int>(0.0);
+}
+
+public int Native_GetWeaponCycleTimeByWeaponNum(Handle hPlugin, int iNumParams) {
+	return view_as<int>(StringToFloat(g_chWeaponInfo[GetNativeCell(1)][CYCLETIME]));
 }
 
 public int Native_GetWeaponReserveAmmoByDefIndex(Handle hPlugin, int iNumParams)
@@ -1337,7 +1428,7 @@ public int Native_GetWeaponReserveAmmoByDefIndex(Handle hPlugin, int iNumParams)
 		}
 	}
 	
-	return -1;
+	return view_as<int>(0.0);
 }
 
 public int Native_GetWeaponReserveAmmoByClassName(Handle hPlugin, int iNumParams)
@@ -1350,7 +1441,7 @@ public int Native_GetWeaponReserveAmmoByClassName(Handle hPlugin, int iNumParams
 		}
 	}
 	
-	return -1;
+	return view_as<int>(0.0);
 }
 
 public int Native_GetWeaponReserveAmmoByWeaponNum(Handle hPlugin, int iNumParams) {
