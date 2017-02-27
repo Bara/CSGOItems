@@ -163,6 +163,7 @@ INCLUDES
 #include <cstrike> 
 #include <sdkhooks> 
 #include <csgoitems> 
+#include <PTaH>
 #include <SteamWorks> 
 
 #undef REQUIRE_EXTENSIONS
@@ -319,7 +320,7 @@ public void OnPluginStart()
 	
 	HookEvent("player_death", Event_PlayerDeath);
 	
-	if(LibraryExists("PTaH")) {
+	if (LibraryExists("PTaH")) {
 		PTaH(PTaH_GiveNamedItemPre, Hook, GiveNamedItemPre);
 	}
 }
@@ -1099,7 +1100,7 @@ public void SyncItemData()
 		
 		KvGetString(g_hItemsKv, "item_name", szBuffer2, 48);
 		
-		if(StrEqual(szBuffer2, "#StickerKit_comm01_rekt", false)) {
+		if (StrEqual(szBuffer2, "#StickerKit_comm01_rekt", false)) {
 			strcopy(g_chSprayInfo[g_iSprayCount][DISPLAYNAME], 48, "Rekt");
 		} else {
 			GetItemName(szBuffer2, g_chSprayInfo[g_iSprayCount][DISPLAYNAME], 48);
@@ -1156,20 +1157,20 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 	
 	int iNumPieces = ExplodeString(szFullDirectory, "\\", szPieces, sizeof(szPieces), sizeof(szPieces[]));
 	
-	for(int i = 0; i < iNumPieces; i++) {
+	for (int i = 0; i < iNumPieces; i++) {
 		Format(szPath, sizeof(szPath), "%s\\%s", szPath, szPieces[i]);
 		
-		if(DirExists(szPath)) {
+		if (DirExists(szPath)) {
 			continue;
 		}
-	
+		
 		CreateDirectory(szPath, 777);
 	}
 	
-	if(!FileExists(szFullFile)) {
+	if (!FileExists(szFullFile)) {
 		File fFile = OpenFile(szFullFile, "w+");
-	
-		if(fFile == null) {
+		
+		if (fFile == null) {
 			LogError("Could not open a file for %s", szFullFile);
 			return false;
 		}
@@ -1305,856 +1306,856 @@ stock void GetItemName(char[] chPhrase, char[] szBuffer, int iLength)
 	
 	iPos += iLen + 1;
 	iPos += StrContains(g_chLangPhrases[iPos], "\"") + 1;
-		iLen = StrContains(g_chLangPhrases[iPos], "\"") + 1;
-		
-		strcopy(szBuffer, iLen, g_chLangPhrases[iPos]);
+	iLen = StrContains(g_chLangPhrases[iPos], "\"") + 1;
+	
+	strcopy(szBuffer, iLen, g_chLangPhrases[iPos]);
+}
+
+stock void GetWeaponClip(char[] szClassName, char[] chReturn, int iLength)
+{
+	char szBuffer[128]; Format(szBuffer, 64, "scripts/%s.txt", szClassName);
+	
+	Handle hFile = OpenFile(szBuffer, "r");
+	
+	if (hFile == null) {
+		strcopy(chReturn, iLength, "-1");
+		return;
 	}
 	
-	stock void GetWeaponClip(char[] szClassName, char[] chReturn, int iLength)
-	{
-		char szBuffer[128]; Format(szBuffer, 64, "scripts/%s.txt", szClassName);
-		
-		Handle hFile = OpenFile(szBuffer, "r");
-		
-		if (hFile == null) {
-			strcopy(chReturn, iLength, "-1");
-			return;
+	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
+		if (StrContains(szBuffer, "clip_size", false) != -1 && StrContains(szBuffer, "default", false) == -1) {
+			ReplaceString(szBuffer, 128, "clip_size", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
+			TrimString(szBuffer); StripQuotes(szBuffer);
+			strcopy(chReturn, iLength, szBuffer);
+			break;
 		}
-		
-		while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-			if (StrContains(szBuffer, "clip_size", false) != -1 && StrContains(szBuffer, "default", false) == -1) {
-				ReplaceString(szBuffer, 128, "clip_size", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
-				TrimString(szBuffer); StripQuotes(szBuffer);
-				strcopy(chReturn, iLength, szBuffer);
-				break;
-			}
-		}
-		
-		if (StrEqual(chReturn, "", false) || StrEqual(chReturn, "0", false)) {
-			strcopy(chReturn, iLength, "-1");
-		}
-		
-		CloseHandle(hFile);
 	}
 	
-	stock bool GetWeaponKillAward(char[] szClassName, char[] chReturn, int iLength)
-	{
-		char szBuffer[128];
-		
-		if (CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByClassName(szClassName))) {
-			Format(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
-		} else {
-			Format(szBuffer, 64, "scripts/%s.txt", szClassName);
-		}
-		
-		Handle hFile = OpenFile(szBuffer, "r");
-		
-		if (hFile == null) {
-			strcopy(chReturn, iLength, "-1");
-			return false;
-		}
-		
-		while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-			if (StrContains(szBuffer, "KillAward", false) != -1 && StrContains(szBuffer, "Weapon", false) == -1) {
-				ReplaceString(szBuffer, 128, "KillAward", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
-				TrimString(szBuffer); StripQuotes(szBuffer);
-				strcopy(chReturn, iLength, szBuffer);
-				break;
-			}
-		}
-		
-		if (StrEqual(chReturn, "", false) || StrEqual(chReturn, "0", false)) {
-			strcopy(chReturn, iLength, "-1");
-			return false;
-		}
-		
-		CloseHandle(hFile);
-		return true;
+	if (StrEqual(chReturn, "", false) || StrEqual(chReturn, "0", false)) {
+		strcopy(chReturn, iLength, "-1");
 	}
 	
-	stock bool GetWeaponSpread(char[] szClassName, char[] chReturn, int iLength)
-	{
-		char szBuffer[128];
-		
-		if (CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByClassName(szClassName))) {
-			Format(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
-		} else {
-			Format(szBuffer, 64, "scripts/%s.txt", szClassName);
-		}
-		
-		Handle hFile = OpenFile(szBuffer, "r");
-		
-		if (hFile == null) {
-			strcopy(chReturn, iLength, "0.0");
-			return false;
-		}
-		
-		while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-			if (StrContains(szBuffer, "Spread", false) != -1 && StrContains(szBuffer, "InaccuracyCrouch", false) == -1) {
-				ReplaceString(szBuffer, 128, "Spread", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
-				TrimString(szBuffer); StripQuotes(szBuffer);
-				strcopy(chReturn, iLength, szBuffer);
-				break;
-			}
-		}
-		
-		if (StrEqual(chReturn, "", false) || StrEqual(chReturn, "0", false)) {
-			strcopy(chReturn, iLength, "0.0");
-			return false;
-		}
-		
-		CloseHandle(hFile);
-		return true;
+	CloseHandle(hFile);
+}
+
+stock bool GetWeaponKillAward(char[] szClassName, char[] chReturn, int iLength)
+{
+	char szBuffer[128];
+	
+	if (CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByClassName(szClassName))) {
+		Format(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
+	} else {
+		Format(szBuffer, 64, "scripts/%s.txt", szClassName);
 	}
 	
-	stock bool GetWeaponCycleTime(char[] szClassName, char[] chReturn, int iLength)
-	{
-		char szBuffer[128];
-		
-		if (CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByClassName(szClassName))) {
-			Format(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
-		} else {
-			Format(szBuffer, 64, "scripts/%s.txt", szClassName);
-		}
-		
-		Handle hFile = OpenFile(szBuffer, "r");
-		
-		if (hFile == null) {
-			strcopy(chReturn, iLength, "0.0");
-			return false;
-		}
-		
-		while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-			if (StrContains(szBuffer, "CycleTime", false) != -1 && StrContains(szBuffer, "TimeToIdle", false) == -1) {
-				ReplaceString(szBuffer, 128, "CycleTime", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
-				TrimString(szBuffer); StripQuotes(szBuffer);
-				strcopy(chReturn, iLength, szBuffer);
-				break;
-			}
-		}
-		
-		if (StrEqual(chReturn, "", false) || StrEqual(chReturn, "0", false)) {
-			strcopy(chReturn, iLength, "0.0");
-			return false;
-		}
-		
-		CloseHandle(hFile);
-		return true;
-	}
+	Handle hFile = OpenFile(szBuffer, "r");
 	
-	stock bool IsValidWeaponClassName(char[] szClassName)
-	{
-		return StrContains(szClassName, "weapon_") != -1 && StrContains(szClassName, "base") == -1 && StrContains(szClassName, "case") == -1;
-	}
-	
-	stock bool IsSpecialPrefab(char[] chPrefabName)
-	{
-		return StrContains(chPrefabName, "_prefab") == -1;
-	}
-	
-	stock bool IsValidClient(int iClient)
-	{
-		if (iClient <= 0 || iClient > MaxClients) {
-			return false;
-		}
-		
-		return IsClientInGame(iClient);
-	}
-	
-	stock int SlotNameToNum(const char[] chSlotName)
-	{
-		if (StrContains(chSlotName, "rifle") != -1 || StrContains(chSlotName, "heavy") != -1 || StrContains(chSlotName, "smg") != -1) {
-			return CS_SLOT_PRIMARY;
-		}
-		
-		else if (StrContains(chSlotName, "secondary") != -1) {
-			return CS_SLOT_SECONDARY;
-		}
-		
-		else if (StrContains(chSlotName, "c4") != -1) {
-			return CS_SLOT_C4;
-		}
-		
-		else if (StrContains(chSlotName, "melee") != -1) {
-			return CS_SLOT_KNIFE;
-		}
-		
-		else if (StrContains(chSlotName, "grenade") != -1) {
-			return CS_SLOT_GRENADE;
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetWeaponCount(Handle hPlugin, int iNumParams) {
-		return g_iWeaponCount;
-	}
-	
-	public int Native_GetSkinCount(Handle hPlugin, int iNumParams) {
-		return g_iPaintCount;
-	}
-	
-	public int Native_GetGlovesCount(Handle hPlugin, int iNumParams) {
-		return g_iGlovesCount;
-	}
-	
-	public int Native_GetSprayCount(Handle hPlugin, int iNumParams) {
-		return g_iSprayCount;
-	}
-	
-	public int Native_GetGlovesPaintCount(Handle hPlugin, int iNumParams) {
-		return g_iGlovesPaintCount;
-	}
-	
-	public int Native_GetMusicKitCount(Handle hPlugin, int iNumParams) {
-		return g_iMusicKitCount;
-	}
-	
-	public int Native_GetItemSetCount(Handle hPlugin, int iNumParams) {
-		return g_iItemSetCount;
-	}
-	
-	public int Native_GetWeaponNumByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				return iWeaponNum;
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetWeaponTeamByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				return StringToInt(g_szWeaponInfo[iWeaponNum][TEAM]);
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetWeaponTeamByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
-				return StringToInt(g_szWeaponInfo[iWeaponNum][TEAM]);
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetWeaponViewModelByWeaponNum(Handle hPlugin, int iNumParams)
-	{
-		int iIndex = GetNativeCell(1);
-		
-		if (iIndex < 0 || iIndex > g_iWeaponCount) {
-			return false;
-		}
-		
-		if (StrEqual(g_szWeaponInfo[iIndex][VIEWMODEL], "", false)) {
-			return false;
-		}
-		
-		return SetNativeString(2, g_szWeaponInfo[iIndex][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
-	}
-	
-	public int Native_GetWeaponViewModelByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				
-				if (StrEqual(g_szWeaponInfo[iWeaponNum][VIEWMODEL], "", false)) {
-					return false;
-				}
-				
-				return SetNativeString(2, g_szWeaponInfo[iWeaponNum][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
-			}
-		}
-		
+	if (hFile == null) {
+		strcopy(chReturn, iLength, "-1");
 		return false;
 	}
 	
-	public int Native_GetGlovesViewModelByGlovesNum(Handle hPlugin, int iNumParams)
-	{
-		int iIndex = GetNativeCell(1);
-		
-		if (iIndex < 0 || iIndex > g_iGlovesCount) {
-			return false;
+	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
+		if (StrContains(szBuffer, "KillAward", false) != -1 && StrContains(szBuffer, "Weapon", false) == -1) {
+			ReplaceString(szBuffer, 128, "KillAward", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
+			TrimString(szBuffer); StripQuotes(szBuffer);
+			strcopy(chReturn, iLength, szBuffer);
+			break;
 		}
-		
-		if (StrEqual(g_chGlovesInfo[iIndex][VIEWMODEL], "", false)) {
-			return false;
-		}
-		
-		return SetNativeString(2, g_chGlovesInfo[iIndex][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
 	}
 	
-	public int Native_GetGlovesViewModelByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopGloves(iGlovesNum) {
-			if (StringToInt(g_chGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
-				
-				if (StrEqual(g_chGlovesInfo[iGlovesNum][VIEWMODEL], "", false)) {
-					return false;
-				}
-				
-				return SetNativeString(2, g_chGlovesInfo[iGlovesNum][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
-			}
-		}
-		
+	if (StrEqual(chReturn, "", false) || StrEqual(chReturn, "0", false)) {
+		strcopy(chReturn, iLength, "-1");
 		return false;
 	}
 	
-	public int Native_GetGlovesWorldModelByGlovesNum(Handle hPlugin, int iNumParams)
-	{
-		int iIndex = GetNativeCell(1);
-		
-		if (iIndex < 0 || iIndex > g_iGlovesCount) {
-			return false;
-		}
-		
-		if (StrEqual(g_chGlovesInfo[iIndex][WORLDMODEL], "", false)) {
-			return false;
-		}
-		
-		return SetNativeString(2, g_chGlovesInfo[iIndex][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+	CloseHandle(hFile);
+	return true;
+}
+
+stock bool GetWeaponSpread(char[] szClassName, char[] chReturn, int iLength)
+{
+	char szBuffer[128];
+	
+	if (CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByClassName(szClassName))) {
+		Format(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
+	} else {
+		Format(szBuffer, 64, "scripts/%s.txt", szClassName);
 	}
 	
-	public int Native_GetGlovesWorldModelByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopGloves(iGlovesNum) {
-			if (StringToInt(g_chGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
-				
-				if (StrEqual(g_chGlovesInfo[iGlovesNum][WORLDMODEL], "", false)) {
-					return false;
-				}
-				
-				return SetNativeString(2, g_chGlovesInfo[iGlovesNum][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
-			}
-		}
-		
+	Handle hFile = OpenFile(szBuffer, "r");
+	
+	if (hFile == null) {
+		strcopy(chReturn, iLength, "0.0");
 		return false;
 	}
 	
-	public int Native_GetWeaponViewModelByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
-				
-				if (StrEqual(g_szWeaponInfo[iWeaponNum][VIEWMODEL], "", false)) {
-					return false;
-				}
-				
-				return StringToInt(g_szWeaponInfo[iWeaponNum][VIEWMODEL]);
-			}
+	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
+		if (StrContains(szBuffer, "Spread", false) != -1 && StrContains(szBuffer, "InaccuracyCrouch", false) == -1) {
+			ReplaceString(szBuffer, 128, "Spread", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
+			TrimString(szBuffer); StripQuotes(szBuffer);
+			strcopy(chReturn, iLength, szBuffer);
+			break;
 		}
-		
+	}
+	
+	if (StrEqual(chReturn, "", false) || StrEqual(chReturn, "0", false)) {
+		strcopy(chReturn, iLength, "0.0");
 		return false;
 	}
 	
-	public int Native_GetWeaponWorldModelByWeaponNum(Handle hPlugin, int iNumParams)
-	{
-		int iIndex = GetNativeCell(1);
-		
-		if (iIndex < 0 || iIndex > g_iWeaponCount) {
-			return false;
-		}
-		
-		if (StrEqual(g_szWeaponInfo[iIndex][WORLDMODEL], "", false)) {
-			return false;
-		}
-		
-		return SetNativeString(2, g_szWeaponInfo[iIndex][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+	CloseHandle(hFile);
+	return true;
+}
+
+stock bool GetWeaponCycleTime(char[] szClassName, char[] chReturn, int iLength)
+{
+	char szBuffer[128];
+	
+	if (CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByClassName(szClassName))) {
+		Format(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
+	} else {
+		Format(szBuffer, 64, "scripts/%s.txt", szClassName);
 	}
 	
-	public int Native_GetWeaponWorldModelByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				
-				if (StrEqual(g_szWeaponInfo[iWeaponNum][WORLDMODEL], "", false)) {
-					return false;
-				}
-				
-				return SetNativeString(2, g_szWeaponInfo[iWeaponNum][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
-			}
-		}
-		
+	Handle hFile = OpenFile(szBuffer, "r");
+	
+	if (hFile == null) {
+		strcopy(chReturn, iLength, "0.0");
 		return false;
 	}
 	
-	public int Native_GetWeaponWorldModelByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
-				
-				if (StrEqual(g_szWeaponInfo[iWeaponNum][WORLDMODEL], "", false)) {
-					return false;
-				}
-				
-				return StringToInt(g_szWeaponInfo[iWeaponNum][WORLDMODEL]);
-			}
+	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
+		if (StrContains(szBuffer, "CycleTime", false) != -1 && StrContains(szBuffer, "TimeToIdle", false) == -1) {
+			ReplaceString(szBuffer, 128, "CycleTime", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
+			TrimString(szBuffer); StripQuotes(szBuffer);
+			strcopy(chReturn, iLength, szBuffer);
+			break;
 		}
-		
+	}
+	
+	if (StrEqual(chReturn, "", false) || StrEqual(chReturn, "0", false)) {
+		strcopy(chReturn, iLength, "0.0");
 		return false;
 	}
 	
-	public int Native_GetWeaponTeamByWeaponNum(Handle hPlugin, int iNumParams)
-	{
-		int iWeaponNum = GetNativeCell(1);
-		
-		return StringToInt(g_szWeaponInfo[iWeaponNum][TEAM]);
-	}
-	
-	public int Native_GetWeaponClipAmmoByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				return StringToInt(g_szWeaponInfo[iWeaponNum][CLIPAMMO]);
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetWeaponClipAmmoByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
-				return StringToInt(g_szWeaponInfo[iWeaponNum][CLIPAMMO]);
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetWeaponClipAmmoByWeaponNum(Handle hPlugin, int iNumParams) {
-		return StringToInt(g_szWeaponInfo[GetNativeCell(1)][CLIPAMMO]);
-	}
-	
-	public int Native_GetWeaponKillAwardByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				return StringToInt(g_szWeaponInfo[iWeaponNum][KILLAWARD]);
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetWeaponKillAwardByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
-				return StringToInt(g_szWeaponInfo[iWeaponNum][KILLAWARD]);
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetWeaponKillAwardByWeaponNum(Handle hPlugin, int iNumParams) {
-		return StringToInt(g_szWeaponInfo[GetNativeCell(1)][KILLAWARD]);
-	}
-	
-	public int Native_GetWeaponSpreadByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				return view_as<int>(StringToFloat(g_szWeaponInfo[iWeaponNum][SPREAD]));
-			}
-		}
-		
-		return view_as<int>(0.0);
-	}
-	
-	public int Native_GetWeaponSpreadByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
-				return view_as<int>(StringToFloat(g_szWeaponInfo[iWeaponNum][SPREAD]));
-			}
-		}
-		
-		return view_as<int>(0.0);
-	}
-	
-	public int Native_GetWeaponSpreadByWeaponNum(Handle hPlugin, int iNumParams) {
-		return view_as<int>(StringToFloat(g_szWeaponInfo[GetNativeCell(1)][SPREAD]));
-	}
-	
-	public int Native_GetWeaponCycleTimeByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				return view_as<int>(StringToFloat(g_szWeaponInfo[iWeaponNum][CYCLETIME]));
-			}
-		}
-		
-		return view_as<int>(0.0);
-	}
-	
-	public int Native_GetWeaponCycleTimeByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
-				return view_as<int>(StringToFloat(g_szWeaponInfo[iWeaponNum][CYCLETIME]));
-			}
-		}
-		
-		return view_as<int>(0.0);
-	}
-	
-	public int Native_GetWeaponCycleTimeByWeaponNum(Handle hPlugin, int iNumParams) {
-		return view_as<int>(StringToFloat(g_szWeaponInfo[GetNativeCell(1)][CYCLETIME]));
-	}
-	
-	public int Native_GetWeaponReserveAmmoByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				return StringToInt(g_szWeaponInfo[iWeaponNum][RESERVEAMMO]);
-			}
-		}
-		
-		return view_as<int>(0.0);
-	}
-	
-	public int Native_GetWeaponReserveAmmoByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
-				return StringToInt(g_szWeaponInfo[iWeaponNum][RESERVEAMMO]);
-			}
-		}
-		
-		return view_as<int>(0.0);
-	}
-	
-	public int Native_GetWeaponReserveAmmoByWeaponNum(Handle hPlugin, int iNumParams) {
-		return StringToInt(g_szWeaponInfo[GetNativeCell(1)][RESERVEAMMO]);
-	}
-	
-	public int Native_SetWeaponAmmo(Handle hPlugin, int iNumParams)
-	{
-		int iWeapon = GetNativeCell(1);
-		int iReserveAmmo = GetNativeCell(2);
-		int iClipAmmo = GetNativeCell(3);
-		
-		if (iReserveAmmo == -1 && iClipAmmo == -1) {
-			return false;
-		}
-		
-		if (!CSGOItems_IsValidWeapon(iWeapon)) {
-			return false;
-		}
-		
-		if (iReserveAmmo > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_iPrimaryReserveAmmoCount", iReserveAmmo);
-		}
-		
-		if (iClipAmmo > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_iClip1", iClipAmmo);
-		}
-		
-		return true;
-	}
-	
-	public int Native_RefillClipAmmo(Handle hPlugin, int iNumParams)
-	{
-		int iWeapon = GetNativeCell(1);
-		int iDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				int iClipAmmo = StringToInt(g_szWeaponInfo[iWeaponNum][CLIPAMMO]);
-				CSGOItems_SetWeaponAmmo(iWeapon, -1, iClipAmmo > 0 ? iClipAmmo : -1);
-				return true;
-			}
-		}
-		
+	CloseHandle(hFile);
+	return true;
+}
+
+stock bool IsValidWeaponClassName(char[] szClassName)
+{
+	return StrContains(szClassName, "weapon_") != -1 && StrContains(szClassName, "base") == -1 && StrContains(szClassName, "case") == -1;
+}
+
+stock bool IsSpecialPrefab(char[] chPrefabName)
+{
+	return StrContains(chPrefabName, "_prefab") == -1;
+}
+
+stock bool IsValidClient(int iClient)
+{
+	if (iClient <= 0 || iClient > MaxClients) {
 		return false;
 	}
 	
-	public int Native_RefillReserveAmmo(Handle hPlugin, int iNumParams)
-	{
-		int iWeapon = GetNativeCell(1);
-		int iDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				int iReserveAmmo = StringToInt(g_szWeaponInfo[iWeaponNum][RESERVEAMMO]);
-				CSGOItems_SetWeaponAmmo(iWeapon, iReserveAmmo > 0 ? iReserveAmmo : -1, -1);
-				return true;
-			}
+	return IsClientInGame(iClient);
+}
+
+stock int SlotNameToNum(const char[] chSlotName)
+{
+	if (StrContains(chSlotName, "rifle") != -1 || StrContains(chSlotName, "heavy") != -1 || StrContains(chSlotName, "smg") != -1) {
+		return CS_SLOT_PRIMARY;
+	}
+	
+	else if (StrContains(chSlotName, "secondary") != -1) {
+		return CS_SLOT_SECONDARY;
+	}
+	
+	else if (StrContains(chSlotName, "c4") != -1) {
+		return CS_SLOT_C4;
+	}
+	
+	else if (StrContains(chSlotName, "melee") != -1) {
+		return CS_SLOT_KNIFE;
+	}
+	
+	else if (StrContains(chSlotName, "grenade") != -1) {
+		return CS_SLOT_GRENADE;
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponCount(Handle hPlugin, int iNumParams) {
+	return g_iWeaponCount;
+}
+
+public int Native_GetSkinCount(Handle hPlugin, int iNumParams) {
+	return g_iPaintCount;
+}
+
+public int Native_GetGlovesCount(Handle hPlugin, int iNumParams) {
+	return g_iGlovesCount;
+}
+
+public int Native_GetSprayCount(Handle hPlugin, int iNumParams) {
+	return g_iSprayCount;
+}
+
+public int Native_GetGlovesPaintCount(Handle hPlugin, int iNumParams) {
+	return g_iGlovesPaintCount;
+}
+
+public int Native_GetMusicKitCount(Handle hPlugin, int iNumParams) {
+	return g_iMusicKitCount;
+}
+
+public int Native_GetItemSetCount(Handle hPlugin, int iNumParams) {
+	return g_iItemSetCount;
+}
+
+public int Native_GetWeaponNumByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return iWeaponNum;
 		}
-		
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponTeamByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][TEAM]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponTeamByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][TEAM]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponViewModelByWeaponNum(Handle hPlugin, int iNumParams)
+{
+	int iIndex = GetNativeCell(1);
+	
+	if (iIndex < 0 || iIndex > g_iWeaponCount) {
 		return false;
 	}
 	
-	public int Native_GetWeaponNumByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
-				return iWeaponNum;
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetGlovesNumByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopGloves(iGlovesNum) {
-			if (StrEqual(g_chGlovesInfo[iGlovesNum][CLASSNAME], szClassName, false)) {
-				return iGlovesNum;
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetSkinNumByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopSkins(iSkinNum) {
-			if (StringToInt(g_chPaintInfo[iSkinNum][DEFINDEX]) == iDefIndex) {
-				return iSkinNum;
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetGlovesNumByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopGloves(iGlovesNum) {
-			if (StringToInt(g_chGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
-				return iGlovesNum;
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetSprayNumByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopSprays(iSprayNum) {
-			if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
-				return iSprayNum;
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetMusicKitNumByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopMusicKits(iMusicKitNum) {
-			if (StringToInt(g_chMusicKitInfo[iMusicKitNum][DEFINDEX]) == iDefIndex) {
-				return iMusicKitNum;
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetItemSetNumByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopItemSets(iSetNum) {
-			if (StrEqual(g_chItemSetInfo[iSetNum][CLASSNAME], szClassName, false)) {
-				return iSetNum;
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetWeaponDefIndexByWeaponNum(Handle hPlugin, int iNumParams) {
-		return StringToInt(g_szWeaponInfo[GetNativeCell(1)][DEFINDEX]);
-	}
-	
-	public int Native_GetWeaponDefIndexByClassName(Handle hPlugin, int iNumParams)
-	{
-		char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
-				return StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]);
-			}
-		}
-		
-		return -1;
-	}
-	
-	public int Native_GetSkinDefIndexBySkinNum(Handle hPlugin, int iNumParams) {
-		return StringToInt(g_chPaintInfo[GetNativeCell(1)][DEFINDEX]);
-	}
-	
-	public int Native_GetGlovesDefIndexByGlovesNum(Handle hPlugin, int iNumParams) {
-		return StringToInt(g_chGlovesInfo[GetNativeCell(1)][DEFINDEX]);
-	}
-	
-	public int Native_GetSprayDefIndexBySprayNum(Handle hPlugin, int iNumParams) {
-		return StringToInt(g_chSprayInfo[GetNativeCell(1)][DEFINDEX]);
-	}
-	
-	public int Native_GetMusicKitDefIndexByMusicKitNum(Handle hPlugin, int iNumParams) {
-		return StringToInt(g_chMusicKitInfo[GetNativeCell(1)][DEFINDEX]);
-	}
-	
-	public int Native_GetWeaponClassNameByWeaponNum(Handle hPlugin, int iNumParams) {
-		return SetNativeString(2, g_szWeaponInfo[GetNativeCell(1)][CLASSNAME], GetNativeCell(3)) == SP_ERROR_NONE;
-	}
-	
-	public int Native_GetWeaponClassNameByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				return SetNativeString(2, g_szWeaponInfo[iWeaponNum][CLASSNAME], GetNativeCell(3)) == SP_ERROR_NONE;
-			}
-		}
-		
+	if (StrEqual(g_szWeaponInfo[iIndex][VIEWMODEL], "", false)) {
 		return false;
 	}
 	
-	public int Native_GetWeaponDisplayNameByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
-				return SetNativeString(2, g_szWeaponInfo[iWeaponNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szWeaponInfo[iIndex][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+}
+
+public int Native_GetWeaponViewModelByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			
+			if (StrEqual(g_szWeaponInfo[iWeaponNum][VIEWMODEL], "", false)) {
+				return false;
 			}
+			
+			return SetNativeString(2, g_szWeaponInfo[iWeaponNum][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
-		
+	}
+	
+	return false;
+}
+
+public int Native_GetGlovesViewModelByGlovesNum(Handle hPlugin, int iNumParams)
+{
+	int iIndex = GetNativeCell(1);
+	
+	if (iIndex < 0 || iIndex > g_iGlovesCount) {
 		return false;
 	}
 	
-	public int Native_GetSkinDisplayNameByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopSkins(iSkinNum) {
-			if (StringToInt(g_chPaintInfo[iSkinNum][DEFINDEX]) == iDefIndex) {
-				return SetNativeString(2, g_chPaintInfo[iSkinNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
-			}
-		}
-		
+	if (StrEqual(g_chGlovesInfo[iIndex][VIEWMODEL], "", false)) {
 		return false;
 	}
 	
-	public int Native_GetSprayDisplayNameByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopSprays(iSprayNum) {
-			if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
-				return SetNativeString(2, g_chSprayInfo[iSprayNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_chGlovesInfo[iIndex][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+}
+
+public int Native_GetGlovesViewModelByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopGloves(iGlovesNum) {
+		if (StringToInt(g_chGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
+			
+			if (StrEqual(g_chGlovesInfo[iGlovesNum][VIEWMODEL], "", false)) {
+				return false;
 			}
+			
+			return SetNativeString(2, g_chGlovesInfo[iGlovesNum][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
-		
+	}
+	
+	return false;
+}
+
+public int Native_GetGlovesWorldModelByGlovesNum(Handle hPlugin, int iNumParams)
+{
+	int iIndex = GetNativeCell(1);
+	
+	if (iIndex < 0 || iIndex > g_iGlovesCount) {
 		return false;
 	}
 	
-	public int Native_GetSprayVMTByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopSprays(iSprayNum) {
-			if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
-				return SetNativeString(2, g_chSprayInfo[iSprayNum][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
-			}
-		}
-		
+	if (StrEqual(g_chGlovesInfo[iIndex][WORLDMODEL], "", false)) {
 		return false;
 	}
 	
-	public int Native_GetSprayVTFByDefIndex(Handle hPlugin, int iNumParams)
-	{
-		int iDefIndex = GetNativeCell(1);
-		
-		CSGOItems_LoopSprays(iSprayNum) {
-			if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
-				return SetNativeString(2, g_chSprayInfo[iSprayNum][VTFPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_chGlovesInfo[iIndex][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+}
+
+public int Native_GetGlovesWorldModelByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopGloves(iGlovesNum) {
+		if (StringToInt(g_chGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
+			
+			if (StrEqual(g_chGlovesInfo[iGlovesNum][WORLDMODEL], "", false)) {
+				return false;
 			}
+			
+			return SetNativeString(2, g_chGlovesInfo[iGlovesNum][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
-		
+	}
+	
+	return false;
+}
+
+public int Native_GetWeaponViewModelByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
+			
+			if (StrEqual(g_szWeaponInfo[iWeaponNum][VIEWMODEL], "", false)) {
+				return false;
+			}
+			
+			return StringToInt(g_szWeaponInfo[iWeaponNum][VIEWMODEL]);
+		}
+	}
+	
+	return false;
+}
+
+public int Native_GetWeaponWorldModelByWeaponNum(Handle hPlugin, int iNumParams)
+{
+	int iIndex = GetNativeCell(1);
+	
+	if (iIndex < 0 || iIndex > g_iWeaponCount) {
 		return false;
 	}
 	
-	public int Native_GetSprayDisplayNameBySprayNum(Handle hPlugin, int iNumParams) {
-		return SetNativeString(2, g_chSprayInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+	if (StrEqual(g_szWeaponInfo[iIndex][WORLDMODEL], "", false)) {
+		return false;
 	}
 	
-	public int Native_GetSprayVMTBySprayNum(Handle hPlugin, int iNumParams) {
-		return SetNativeString(2, g_chSprayInfo[GetNativeCell(1)][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szWeaponInfo[iIndex][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+}
+
+public int Native_GetWeaponWorldModelByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			
+			if (StrEqual(g_szWeaponInfo[iWeaponNum][WORLDMODEL], "", false)) {
+				return false;
+			}
+			
+			return SetNativeString(2, g_szWeaponInfo[iWeaponNum][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+		}
 	}
 	
-	public int Native_GetSprayCacheIndexBySprayNum(Handle hPlugin, int iNumParams)
-	{
-		char szBuffer[PLATFORM_MAX_PATH];
-		strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[GetNativeCell(1)][VMTPATH]);
-		
-		ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials\\", "", false);
+	return false;
+}
+
+public int Native_GetWeaponWorldModelByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
+			
+			if (StrEqual(g_szWeaponInfo[iWeaponNum][WORLDMODEL], "", false)) {
+				return false;
+			}
+			
+			return StringToInt(g_szWeaponInfo[iWeaponNum][WORLDMODEL]);
+		}
+	}
+	
+	return false;
+}
+
+public int Native_GetWeaponTeamByWeaponNum(Handle hPlugin, int iNumParams)
+{
+	int iWeaponNum = GetNativeCell(1);
+	
+	return StringToInt(g_szWeaponInfo[iWeaponNum][TEAM]);
+}
+
+public int Native_GetWeaponClipAmmoByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][CLIPAMMO]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponClipAmmoByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][CLIPAMMO]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponClipAmmoByWeaponNum(Handle hPlugin, int iNumParams) {
+	return StringToInt(g_szWeaponInfo[GetNativeCell(1)][CLIPAMMO]);
+}
+
+public int Native_GetWeaponKillAwardByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][KILLAWARD]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponKillAwardByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][KILLAWARD]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponKillAwardByWeaponNum(Handle hPlugin, int iNumParams) {
+	return StringToInt(g_szWeaponInfo[GetNativeCell(1)][KILLAWARD]);
+}
+
+public int Native_GetWeaponSpreadByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return view_as<int>(StringToFloat(g_szWeaponInfo[iWeaponNum][SPREAD]));
+		}
+	}
+	
+	return view_as<int>(0.0);
+}
+
+public int Native_GetWeaponSpreadByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
+			return view_as<int>(StringToFloat(g_szWeaponInfo[iWeaponNum][SPREAD]));
+		}
+	}
+	
+	return view_as<int>(0.0);
+}
+
+public int Native_GetWeaponSpreadByWeaponNum(Handle hPlugin, int iNumParams) {
+	return view_as<int>(StringToFloat(g_szWeaponInfo[GetNativeCell(1)][SPREAD]));
+}
+
+public int Native_GetWeaponCycleTimeByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return view_as<int>(StringToFloat(g_szWeaponInfo[iWeaponNum][CYCLETIME]));
+		}
+	}
+	
+	return view_as<int>(0.0);
+}
+
+public int Native_GetWeaponCycleTimeByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
+			return view_as<int>(StringToFloat(g_szWeaponInfo[iWeaponNum][CYCLETIME]));
+		}
+	}
+	
+	return view_as<int>(0.0);
+}
+
+public int Native_GetWeaponCycleTimeByWeaponNum(Handle hPlugin, int iNumParams) {
+	return view_as<int>(StringToFloat(g_szWeaponInfo[GetNativeCell(1)][CYCLETIME]));
+}
+
+public int Native_GetWeaponReserveAmmoByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][RESERVEAMMO]);
+		}
+	}
+	
+	return view_as<int>(0.0);
+}
+
+public int Native_GetWeaponReserveAmmoByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][RESERVEAMMO]);
+		}
+	}
+	
+	return view_as<int>(0.0);
+}
+
+public int Native_GetWeaponReserveAmmoByWeaponNum(Handle hPlugin, int iNumParams) {
+	return StringToInt(g_szWeaponInfo[GetNativeCell(1)][RESERVEAMMO]);
+}
+
+public int Native_SetWeaponAmmo(Handle hPlugin, int iNumParams)
+{
+	int iWeapon = GetNativeCell(1);
+	int iReserveAmmo = GetNativeCell(2);
+	int iClipAmmo = GetNativeCell(3);
+	
+	if (iReserveAmmo == -1 && iClipAmmo == -1) {
+		return false;
+	}
+	
+	if (!CSGOItems_IsValidWeapon(iWeapon)) {
+		return false;
+	}
+	
+	if (iReserveAmmo > -1) {
+		SetEntProp(iWeapon, Prop_Send, "m_iPrimaryReserveAmmoCount", iReserveAmmo);
+	}
+	
+	if (iClipAmmo > -1) {
+		SetEntProp(iWeapon, Prop_Send, "m_iClip1", iClipAmmo);
+	}
+	
+	return true;
+}
+
+public int Native_RefillClipAmmo(Handle hPlugin, int iNumParams)
+{
+	int iWeapon = GetNativeCell(1);
+	int iDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			int iClipAmmo = StringToInt(g_szWeaponInfo[iWeaponNum][CLIPAMMO]);
+			CSGOItems_SetWeaponAmmo(iWeapon, -1, iClipAmmo > 0 ? iClipAmmo : -1);
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+public int Native_RefillReserveAmmo(Handle hPlugin, int iNumParams)
+{
+	int iWeapon = GetNativeCell(1);
+	int iDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			int iReserveAmmo = StringToInt(g_szWeaponInfo[iWeaponNum][RESERVEAMMO]);
+			CSGOItems_SetWeaponAmmo(iWeapon, iReserveAmmo > 0 ? iReserveAmmo : -1, -1);
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+public int Native_GetWeaponNumByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
+			return iWeaponNum;
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetGlovesNumByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopGloves(iGlovesNum) {
+		if (StrEqual(g_chGlovesInfo[iGlovesNum][CLASSNAME], szClassName, false)) {
+			return iGlovesNum;
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetSkinNumByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopSkins(iSkinNum) {
+		if (StringToInt(g_chPaintInfo[iSkinNum][DEFINDEX]) == iDefIndex) {
+			return iSkinNum;
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetGlovesNumByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopGloves(iGlovesNum) {
+		if (StringToInt(g_chGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
+			return iGlovesNum;
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetSprayNumByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopSprays(iSprayNum) {
+		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
+			return iSprayNum;
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetMusicKitNumByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopMusicKits(iMusicKitNum) {
+		if (StringToInt(g_chMusicKitInfo[iMusicKitNum][DEFINDEX]) == iDefIndex) {
+			return iMusicKitNum;
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetItemSetNumByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopItemSets(iSetNum) {
+		if (StrEqual(g_chItemSetInfo[iSetNum][CLASSNAME], szClassName, false)) {
+			return iSetNum;
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponDefIndexByWeaponNum(Handle hPlugin, int iNumParams) {
+	return StringToInt(g_szWeaponInfo[GetNativeCell(1)][DEFINDEX]);
+}
+
+public int Native_GetWeaponDefIndexByClassName(Handle hPlugin, int iNumParams)
+{
+	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetSkinDefIndexBySkinNum(Handle hPlugin, int iNumParams) {
+	return StringToInt(g_chPaintInfo[GetNativeCell(1)][DEFINDEX]);
+}
+
+public int Native_GetGlovesDefIndexByGlovesNum(Handle hPlugin, int iNumParams) {
+	return StringToInt(g_chGlovesInfo[GetNativeCell(1)][DEFINDEX]);
+}
+
+public int Native_GetSprayDefIndexBySprayNum(Handle hPlugin, int iNumParams) {
+	return StringToInt(g_chSprayInfo[GetNativeCell(1)][DEFINDEX]);
+}
+
+public int Native_GetMusicKitDefIndexByMusicKitNum(Handle hPlugin, int iNumParams) {
+	return StringToInt(g_chMusicKitInfo[GetNativeCell(1)][DEFINDEX]);
+}
+
+public int Native_GetWeaponClassNameByWeaponNum(Handle hPlugin, int iNumParams) {
+	return SetNativeString(2, g_szWeaponInfo[GetNativeCell(1)][CLASSNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+}
+
+public int Native_GetWeaponClassNameByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_szWeaponInfo[iWeaponNum][CLASSNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+		}
+	}
+	
+	return false;
+}
+
+public int Native_GetWeaponDisplayNameByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_szWeaponInfo[iWeaponNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+		}
+	}
+	
+	return false;
+}
+
+public int Native_GetSkinDisplayNameByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopSkins(iSkinNum) {
+		if (StringToInt(g_chPaintInfo[iSkinNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_chPaintInfo[iSkinNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+		}
+	}
+	
+	return false;
+}
+
+public int Native_GetSprayDisplayNameByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopSprays(iSprayNum) {
+		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_chSprayInfo[iSprayNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+		}
+	}
+	
+	return false;
+}
+
+public int Native_GetSprayVMTByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopSprays(iSprayNum) {
+		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_chSprayInfo[iSprayNum][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+		}
+	}
+	
+	return false;
+}
+
+public int Native_GetSprayVTFByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	CSGOItems_LoopSprays(iSprayNum) {
+		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_chSprayInfo[iSprayNum][VTFPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+		}
+	}
+	
+	return false;
+}
+
+public int Native_GetSprayDisplayNameBySprayNum(Handle hPlugin, int iNumParams) {
+	return SetNativeString(2, g_chSprayInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+}
+
+public int Native_GetSprayVMTBySprayNum(Handle hPlugin, int iNumParams) {
+	return SetNativeString(2, g_chSprayInfo[GetNativeCell(1)][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+}
+
+public int Native_GetSprayCacheIndexBySprayNum(Handle hPlugin, int iNumParams)
+{
+	char szBuffer[PLATFORM_MAX_PATH];
+	strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[GetNativeCell(1)][VMTPATH]);
+	
+	ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials\\", "", false);
 	ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
 	
 	PrecacheMaterial(szBuffer);
@@ -2172,7 +2173,7 @@ public int Native_GetSprayCacheIndexByDefIndex(Handle hPlugin, int iNumParams)
 	CSGOItems_LoopSprays(iSprayNum) {
 		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
 			char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[iSprayNum][VMTPATH]);
-	
+			
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials\\", "", false);
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
 			
@@ -2358,7 +2359,7 @@ public int Native_FindWeaponByClassName(Handle hPlugin, int iNumParams)
 		CSGOItems_GetWeaponClassNameByWeapon(iWeapon, szBuffer, 48); iDefIndex2 = CSGOItems_GetWeaponDefIndexByClassName(szBuffer);
 		GetEntityClassname(iWeapon, szBuffer2, 48); iDefIndex3 = CSGOItems_GetWeaponDefIndexByClassName(szBuffer2);
 		
-		if(CSGOItems_IsDefIndexKnife(iOriginalDefIndex) && (CSGOItems_IsDefIndexKnife(iDefIndex2) || CSGOItems_IsDefIndexKnife(iDefIndex3))) {
+		if (CSGOItems_IsDefIndexKnife(iOriginalDefIndex) && (CSGOItems_IsDefIndexKnife(iDefIndex2) || CSGOItems_IsDefIndexKnife(iDefIndex3))) {
 			return iWeapon;
 		}
 		
@@ -2552,9 +2553,9 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	int iWeapon = -1;
 	
 	if (bKnife) {
-		if(iClientTeam == CS_TEAM_T) {
+		if (iClientTeam == CS_TEAM_T) {
 			strcopy(szClassName, 48, "weapon_knife_t");
-		} else if(iClientTeam == CS_TEAM_CT) {
+		} else if (iClientTeam == CS_TEAM_CT) {
 			strcopy(szClassName, 48, "weapon_knife");
 		}
 		
@@ -2612,10 +2613,10 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	
 	int iSwitchWeapon = -1;
 	
-	if(iSwitchTo > -1 && iSwitchTo <= 4) {
-		 iSwitchWeapon = GetPlayerWeaponSlot(iClient, iSwitchTo);
+	if (iSwitchTo > -1 && iSwitchTo <= 4) {
+		iSwitchWeapon = GetPlayerWeaponSlot(iClient, iSwitchTo);
 		
-		if(CSGOItems_IsValidWeapon(iSwitchWeapon)) {
+		if (CSGOItems_IsValidWeapon(iSwitchWeapon)) {
 			CSGOItems_SetActiveWeapon(iClient, iSwitchWeapon);
 		}
 	}
@@ -2735,23 +2736,23 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 
 public Action GiveNamedItemPre(int iClient, char sClassname[64], CEconItemView &Item)
 {
-	if(IsFakeClient(iClient)) {
+	if (IsFakeClient(iClient)) {
 		return Plugin_Continue;
 	}
 	
 	int iDefIndex = CSGOItems_GetWeaponDefIndexByClassName(sClassname);
 	
-	if(iDefIndex <= -1) {
+	if (iDefIndex <= -1) {
 		return Plugin_Handled;
 	}
 	
-	if(CSGOItems_IsDefIndexKnife(iDefIndex)) {
+	if (CSGOItems_IsDefIndexKnife(iDefIndex)) {
 		return Plugin_Continue;
 	}
 	
 	int iWeaponSlot = CSGOItems_GetWeaponSlotByDefIndex(iDefIndex);
 	
-	if(iWeaponSlot <= -1) {
+	if (iWeaponSlot <= -1) {
 		return Plugin_Handled;
 	}
 	
@@ -2760,11 +2761,11 @@ public Action GiveNamedItemPre(int iClient, char sClassname[64], CEconItemView &
 	for (int i = 0; i < g_iGiveCount[iClient]; i++) {
 		iTempWeaponSlot = CSGOItems_GetWeaponSlotByDefIndex(g_iGiveItems[iClient][i]);
 		
-		if(iTempWeaponSlot <= -1 || iTempWeaponSlot != iWeaponSlot) {
+		if (iTempWeaponSlot <= -1 || iTempWeaponSlot != iWeaponSlot) {
 			continue;
 		}
 		
-		if(!CSGOItems_GetWeaponClassNameByDefIndex(g_iGiveItems[iClient][i], sClassname, 64)) {
+		if (!CSGOItems_GetWeaponClassNameByDefIndex(g_iGiveItems[iClient][i], sClassname, 64)) {
 			return Plugin_Continue;
 		}
 		
@@ -3049,7 +3050,7 @@ public int Native_GetRandomSkin(Handle hPlugin, int iNumParams) {
 
 stock int PrecacheMaterial(const char[] szMaterial)
 {
-	if(StrEqual(szMaterial, "", false || strlen(szMaterial) <= 0)) {
+	if (StrEqual(szMaterial, "", false || strlen(szMaterial) <= 0)) {
 		return INVALID_STRING_INDEX;
 	}
 	
@@ -3081,7 +3082,7 @@ stock int SafePrecacheModel(char[] szModel, bool bPreLoad = false)
 {
 	TrimString(szModel); StripQuotes(szModel);
 	
-	if(StrEqual(szModel, "", false || strlen(szModel) <= 0)) {
+	if (StrEqual(szModel, "", false || strlen(szModel) <= 0)) {
 		return -1;
 	}
 	
@@ -3092,7 +3093,7 @@ stock int SafePrecacheDecal(char[] szModel, bool bPreLoad = false)
 {
 	TrimString(szModel); StripQuotes(szModel);
 	
-	if(StrEqual(szModel, "", false || strlen(szModel) <= 0)) {
+	if (StrEqual(szModel, "", false || strlen(szModel) <= 0)) {
 		return -1;
 	}
 	
