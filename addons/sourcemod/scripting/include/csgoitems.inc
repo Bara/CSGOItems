@@ -3,16 +3,38 @@
 #endif
 #define _csgoitems_included_
 
+
+public SharedPlugin __pl_csgoitems = 
+{
+	name = "CSGO_Items", 
+	file = "CSGO_Items.smx", 
+	#if defined REQUIRE_PLUGIN
+	required = 1, 
+	#else
+	required = 0, 
+	#endif
+};
+
+#if !defined REQUIRE_PLUGIN
+public void __pl_csgoitems_SetNTVOptional() {
+	MarkNativeAsOptional("CSGOItems_IsValidWeapon");
+	MarkNativeAsOptional("CSGOItems_GiveWeapon");
+}
+#endif
+
 native int CSGOItems_GetWeaponCount();
 native int CSGOItems_GetMusicKitCount();
 native int CSGOItems_GetSkinCount();
+native int CSGOItems_GetGlovesCount();
+native int CSGOItems_GetSprayCount();
+native int CSGOItems_GetGlovesPaintCount();
 native int CSGOItems_GetActiveWeaponCount(const char[] chClassName, int iTeam = 0);
 
 // WEAPONS
 native int CSGOItems_GetWeaponNumByDefIndex(int iDefIndex);
-native int CSGOItems_GetWeaponNumByClassName(const char[] chClassName);
+native bool CSGOItems_GetWeaponNumByClassName(const char[] chClassName);
 native int CSGOItems_GetWeaponDefIndexByWeaponNum(int iWeaponNum);
-native int CSGOItems_GetWeaponDefIndexByClassName(const char[] chClassName);
+native bool CSGOItems_GetWeaponDefIndexByClassName(const char[] chClassName);
 native bool CSGOItems_GetWeaponClassNameByWeaponNum(int iWeaponNum, char[] chBuffer, int iLengh);
 native bool CSGOItems_GetWeaponClassNameByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
 native bool CSGOItems_GetWeaponDisplayNameByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
@@ -54,7 +76,7 @@ native float CSGOItems_GetWeaponSpreadByWeaponNum(int iWeaponNum);
 native float CSGOItems_GetWeaponCycleTimeByDefIndex(int iDefIndex);
 native float CSGOItems_GetWeaponCycleTimeByClassName(const char[] chClassName);
 native float CSGOItems_GetWeaponCycleTimeByWeaponNum(int iWeaponNum);
-native int CSGOItems_GetItemSetNumByClassName(const char[] chClassName, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetItemSetNumByClassName(const char[] chClassName, char[] chBuffer, int iLengh);
 native bool CSGOItems_GetItemSetDisplayNameByClassName(const char[] chClassName, char[] chBuffer, int iLengh);
 native bool CSGOItems_GetItemSetDisplayNameByItemSetNum(int iSetNum, char[] chBuffer, int iLengh);
 native bool CSGOItems_RefillClipAmmo(int iWeapon);
@@ -75,10 +97,40 @@ native bool CSGOItems_ReSync();
 native int CSGOItems_GetRandomSkin();
 
 // SKINS
+native bool CSGOItems_IsSkinNumGloveApplicable(int iSkinNum);
 native int CSGOItems_GetSkinNumByDefIndex(int iDefIndex);
 native int CSGOItems_GetSkinDefIndexBySkinNum(int iSkinNum);
 native bool CSGOItems_GetSkinDisplayNameByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
 native bool CSGOItems_GetSkinDisplayNameBySkinNum(int iSkinNum, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetSkinVmtPathBySkinNum(int iSkinNum, char[] chBuffer, int iLength);
+native bool CSGOItems_IsNativeSkin(int iSkinNum, int iItemNum);
+
+// Gloves
+native int CSGOItems_GetGlovesNumByDefIndex(int iDefIndex);
+native bool CSGOItems_GetGlovesNumByClassName(const char[] chClassName);
+native int CSGOItems_GetGlovesDefIndexByGlovesNum(int iGlovesNum);
+native bool CSGOItems_GetGlovesDisplayNameByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetGlovesDisplayNameByGlovesNum(int iGlovesNum, char[] chBuffer, int iLengh);
+
+native bool CSGOItems_GetGlovesViewModelByGlovesNum(int iGlovesNum, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetGlovesViewModelByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetGlovesWorldModelByGlovesNum(int iGlovesNum, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetGlovesWorldModelByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
+
+// Sprays
+native int CSGOItems_GetSprayNumByDefIndex(int iDefIndex);
+native int CSGOItems_GetSprayDefIndexBySprayNum(int iSprayNum);
+
+native int CSGOItems_GetSprayCacheIndexByDefIndex(int iDefIndex);
+native int CSGOItems_GetSprayCacheIndexBySprayNum(int iSprayNum);
+
+native bool CSGOItems_GetSprayDisplayNameByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetSprayDisplayNameBySprayNum(int iSprayNum, char[] chBuffer, int iLengh);
+
+native bool CSGOItems_GetSprayVMTBySprayNum(int iSprayNum, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetSprayVMTByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetSprayVTFBySprayNum(int iSprayNum, char[] chBuffer, int iLengh);
+native bool CSGOItems_GetSprayVTFByDefIndex(int iSprayNum, char[] chBuffer, int iLengh);
 
 // MUSIC KITS
 native int CSGOItems_GetMusicKitNumByDefIndex(int iDefIndex);
