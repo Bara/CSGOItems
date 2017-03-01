@@ -2811,8 +2811,13 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 		return false;
 	}
 	
-	if (!CSGOItems_DropWeapon(iClient, iWeapon)) {
-		return false;
+	int iWeaponArraySize = GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons");
+	
+	for (int i = 0; i < iWeaponArraySize; i++) {
+		if(iWeapon == GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i)) {
+			SetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", -1, i);
+			break;
+		}
 	}
 	
 	int iWorldModel = GetEntPropEnt(iWeapon, Prop_Send, "m_hWeaponWorldModel");
