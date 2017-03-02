@@ -165,9 +165,6 @@ INCLUDES
 #include <csgoitems> 
 #include <SteamWorks> 
 
-#undef REQUIRE_EXTENSIONS
-#include <PTaH>
-
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
@@ -318,10 +315,6 @@ public void OnPluginStart()
 	}
 	
 	HookEvent("player_death", Event_PlayerDeath);
-	
-	if (LibraryExists("PTaH")) {
-		//PTaH(PTaH_GiveNamedItemPre, Hook, GiveNamedItemPre);
-	}
 }
 
 public int SteamWorks_SteamServersConnected() {
@@ -2731,47 +2724,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	Call_Finish();
 	
 	return iWeapon;
-}
-
-public Action GiveNamedItemPre(int iClient, char sClassname[64], CEconItemView &Item)
-{
-	if (IsFakeClient(iClient)) {
-		return Plugin_Continue;
-	}
-	
-	int iDefIndex = CSGOItems_GetWeaponDefIndexByClassName(sClassname);
-	
-	if (iDefIndex <= -1) {
-		return Plugin_Handled;
-	}
-	
-	if (CSGOItems_IsDefIndexKnife(iDefIndex)) {
-		return Plugin_Continue;
-	}
-	
-	int iWeaponSlot = CSGOItems_GetWeaponSlotByDefIndex(iDefIndex);
-	
-	if (iWeaponSlot <= -1) {
-		return Plugin_Handled;
-	}
-	
-	int iTempWeaponSlot = -1;
-	
-	for (int i = 0; i < g_iGiveCount[iClient]; i++) {
-		iTempWeaponSlot = CSGOItems_GetWeaponSlotByDefIndex(g_iGiveItems[iClient][i]);
-		
-		if (iTempWeaponSlot <= -1 || iTempWeaponSlot != iWeaponSlot) {
-			continue;
-		}
-		
-		if (!CSGOItems_GetWeaponClassNameByDefIndex(g_iGiveItems[iClient][i], sClassname, 64)) {
-			return Plugin_Continue;
-		}
-		
-		return Plugin_Changed;
-	}
-	
-	return Plugin_Continue;
 }
 
 public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
