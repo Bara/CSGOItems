@@ -154,6 +154,11 @@ CHANGELOG
 			- Increased Cell array sizes (I really need to implement Dynamic at some point..)
 			- Prevent giving knives to avoid GLST bans (It will now automatically set it to weapon_knife or weapon_knife_t dependent of the client team.)
 			- Many other fixes / code cleanup (Please avoid indenting the code using Spedit it will break a few things) (Ignore the compile warnings.)
+		1.3.6 ~
+			- Removed PTAH completely.
+			- Made sprays feature optional, if you create a spray plugin then you will want to enable the cvar csgoitems_spraysenabled.
+			- Improved weapon removal method.
+			- A few other misc fixes.
 			
 ****************************************************************************************************
 INCLUDES
@@ -164,11 +169,12 @@ INCLUDES
 #include <sdkhooks> 
 #include <csgoitems> 
 #include <SteamWorks> 
+#include <autoexecconfig> 
 
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.3.5"
+#define VERSION "1.3.6"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -221,6 +227,7 @@ Handle g_hOnItemsSynced = null;
 Handle g_hOnPluginEnd = null;
 Handle g_hSwitchWeaponCall = null;
 Handle g_hOnWeaponGiven = null;
+ConVar g_hCvarSpraysEnabled = null;
 
 /****************************************************************************************************
 BOOLS.
@@ -237,6 +244,7 @@ bool g_bIsNativeSkin[650][100];
 bool g_bIsSkinInSet[100][650];
 bool g_bSteamWorksLoaded = false;
 bool g_bRoundEnd = false;
+bool g_bSpraysEnabled = false;
 
 /****************************************************************************************************
 STRINGS.
@@ -315,6 +323,18 @@ public void OnPluginStart()
 	}
 	
 	HookEvent("player_death", Event_PlayerDeath);
+	
+	AutoExecConfig_SetFile("plugin.csgoitems");
+	g_hCvarSpraysEnabled = AutoExecConfig_CreateConVar("csgoitems_spraysenabled", "0", "Should CSGO Items add support for sprays / make clients download them?");
+	g_hCvarSpraysEnabled.AddChangeHook(OnCvarChanged);
+	AutoExecConfig_CleanFile(); AutoExecConfig_ExecuteFile();
+}
+
+public void OnCvarChanged(ConVar hConVar, const char[] szOldValue, const char[] szNewValue)
+{
+	if (hConVar == g_hCvarSpraysEnabled) {
+		g_bSpraysEnabled = view_as<bool>(StringToInt(szNewValue));
+	}
 }
 
 public int SteamWorks_SteamServersConnected() {
@@ -1145,7 +1165,7 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 	char szPieces[32][PLATFORM_MAX_PATH];
 	char szPath[PLATFORM_MAX_PATH];
 	char szTexturePathFormat[128];
-	char szOutFile[PLATFORM_MAX_PATH];
+	//char szOutFile[PLATFORM_MAX_PATH];
 	
 	int iNumPieces = ExplodeString(szFullDirectory, "\\", szPieces, sizeof(szPieces), sizeof(szPieces[]));
 	
@@ -1163,7 +1183,6 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 		File fFile = OpenFile(szFullFile, "w+");
 		
 		if (fFile == null) {
-			LogError("Could not open a file for %s", szFullFile);
 			return false;
 		}
 		
@@ -1179,9 +1198,9 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 		fFile.WriteLine("	\"$mappingheight\" \"48\"");
 		fFile.WriteLine("}");
 		
+		/*
 		Format(szOutFile, PLATFORM_MAX_PATH, "%s.bz2", szFullFile);
 		
-		/*
 		DataPack dPack = CreateDataPack();
 		dPack.WriteString(szDirectory);
 		dPack.Reset();
@@ -1220,6 +1239,10 @@ public int Uploaded_File(const char[] sTarget, const char[] sLocalFile, const ch
 }
 */
 
+public void OnConfigsExecuted() {
+	g_bSpraysEnabled = g_hCvarSpraysEnabled.BoolValue;
+}
+
 public void OnMapStart()
 {
 	if (!g_bItemsSynced || g_bItemsSyncing) {
@@ -1230,16 +1253,18 @@ public void OnMapStart()
 		PrecacheMaterial(g_chPaintInfo[iSkinNum][VMTPATH]);
 	}
 	
-	CSGOItems_LoopSprays(iSprayNum) {
-		AddFileToDownloadsTable(g_chSprayInfo[iSprayNum][VMTPATH]);
-		
-		char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[iSprayNum][VMTPATH]);
-		
-		ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials\\", "", false);
-		ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
-		
-		PrecacheDecal(szBuffer);
-		PrecacheMaterial(szBuffer);
+	if(g_bSpraysEnabled) {
+		CSGOItems_LoopSprays(iSprayNum) {
+			AddFileToDownloadsTable(g_chSprayInfo[iSprayNum][VMTPATH]);
+			
+			char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[iSprayNum][VMTPATH]);
+			
+			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials\\", "", false);
+			ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
+			
+			PrecacheDecal(szBuffer);
+			PrecacheMaterial(szBuffer);
+		}
 	}
 }
 
