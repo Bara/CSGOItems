@@ -163,7 +163,6 @@ INCLUDES
 #include <cstrike> 
 #include <sdkhooks> 
 #include <csgoitems> 
-#include <PTaH>
 #include <SteamWorks> 
 
 #undef REQUIRE_EXTENSIONS
