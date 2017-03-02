@@ -321,7 +321,7 @@ public void OnPluginStart()
 	HookEvent("player_death", Event_PlayerDeath);
 	
 	if (LibraryExists("PTaH")) {
-		PTaH(PTaH_GiveNamedItemPre, Hook, GiveNamedItemPre);
+		//PTaH(PTaH_GiveNamedItemPre, Hook, GiveNamedItemPre);
 	}
 }
 
@@ -2943,7 +2943,7 @@ public int Native_SetActiveWeapon(Handle hPlugin, int iNumParams)
 	
 	char szWeapon[48]; GetEntityClassname(iWeapon, szWeapon, 48);
 	
-	FakeClientCommandEx(iClient, "use % s", szWeapon);
+	FakeClientCommandEx(iClient, "use %s", szWeapon);
 	SDKCall(g_hSwitchWeaponCall, iClient, iWeapon, 0);
 	SetEntPropEnt(iClient, Prop_Send, "m_hActiveWeapon", iWeapon);
 	SetEntProp(iClient, Prop_Send, "m_iHideHUD", iHudFlags);
