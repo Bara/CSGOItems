@@ -1,0 +1,8 @@
+LightmappedGeneric
+{
+	"$basetexture"	"decals\sprays\valve_sprays\ripip"
+	"$translucent" "1"
+	"$decal" "1"
+	"$mappingwidth" "48"
+	"$mappingheight" "48"
+}

@@ -1,0 +1,8 @@
+LightmappedGeneric
+{
+	"$basetexture"	"decals\sprays\default\gg_01"
+	"$translucent" "1"
+	"$decal" "1"
+	"$mappingwidth" "48"
+	"$mappingheight" "48"
+}
