@@ -161,6 +161,15 @@ CHANGELOG
 			- A few other misc fixes.
 		1.3.7 ~
 			- Update language url.
+		1.3.8 ~
+			- Fixed crash related to null being passed in forward when a definition index was out of bounds.
+			- Removed the horrible backward slashes which were causing indentation to fuck up, Apparently they were not needed and a forward slash is fine.
+				- If you utilize the spray natives then you will notice the folder will be regenerated as csgoitemsv2 in order to fix any pure mismatches with clients.
+				- You will have to reupload the new files to your FastDL server.
+			- Fixed CSGOItems_IsSkinnableDefIndex throwing an error when the input was out of bounds.
+				- It will now also throw an error if the defindex goes over 700 (Which is the current max size of the cell arrays) Just incase volvo add new weapons eventually.
+			- Removed some left over code and variables which is no longer used.
+			- Fixed WeaponDefIndex and WeaponNum potentially being incorrect inside the CSGOItems_GiveWeapon native.
 			
 ****************************************************************************************************
 INCLUDES
@@ -176,7 +185,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.3.7"
+#define VERSION "1.3.8"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -278,8 +287,6 @@ int g_iItemSetCount = 0;
 int g_iSprayCount = 0;
 int g_iLanguageDownloadAttempts = 0;
 int g_iSchemaDownloadAttempts = 0;
-int g_iGiveItems[MAXPLAYERS + 1][12];
-int g_iGiveCount[MAXPLAYERS + 1] = 0;
 
 #define CSGOItems_LoopWeapons(%1) for(int %1 = 0; %1 < g_iWeaponCount; %1++)
 #define CSGOItems_LoopSkins(%1) for(int %1 = 0; %1 < g_iPaintCount; %1++)
@@ -313,9 +320,6 @@ public void OnPluginStart()
 	PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer);
 	PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
 	
-	HookEvent("round_poststart", OnRoundStart, EventHookMode_Post);
-	HookEvent("round_end", OnRoundEnd, EventHookMode_Pre);
-	
 	g_hSwitchWeaponCall = EndPrepSDKCall();
 	
 	CloseHandle(hConfig);
@@ -325,6 +329,8 @@ public void OnPluginStart()
 	}
 	
 	HookEvent("player_death", Event_PlayerDeath);
+	HookEvent("round_poststart", OnRoundStart, EventHookMode_Post);
+	HookEvent("round_end", OnRoundEnd, EventHookMode_Pre);
 	
 	AutoExecConfig_SetFile("plugin.csgoitems");
 	g_hCvarSpraysEnabled = AutoExecConfig_CreateConVar("csgoitems_spraysenabled", "0", "Should CSGO Items add support for sprays / make clients download them?");
@@ -1108,9 +1114,8 @@ public void SyncItemData()
 		}
 		
 		KvGetString(g_hItemsKv, "sticker_material", szBuffer, 48);
-		ReplaceString(szBuffer, PLATFORM_MAX_PATH, "/", "\\", false);
 		
-		Format(g_chSprayInfo[g_iSprayCount][VTFPATH], PLATFORM_MAX_PATH, "decals\\sprays\\%s.vtf", szBuffer);
+		Format(g_chSprayInfo[g_iSprayCount][VTFPATH], PLATFORM_MAX_PATH, "decals/sprays/%s.vtf", szBuffer);
 		
 		KvGetString(g_hItemsKv, "item_name", szBuffer2, 48);
 		
@@ -1123,7 +1128,7 @@ public void SyncItemData()
 		KvGetSectionName(g_hItemsKv, szBuffer2, 48);
 		strcopy(g_chSprayInfo[g_iSprayCount][DEFINDEX], 48, szBuffer2);
 		
-		char szExplode[2][64]; ExplodeString(szBuffer, "\\", szExplode, 2, 64);
+		char szExplode[2][64]; ExplodeString(szBuffer, "/", szExplode, 2, 64);
 		
 		CreateSprayVMT(g_iSprayCount, szExplode[0], szExplode[1], g_chSprayInfo[g_iSprayCount][VTFPATH]);
 		SafePrecacheDecal(g_chSprayInfo[g_iSprayCount][VTFPATH]);
@@ -1162,17 +1167,17 @@ public void SyncItemData()
 
 stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] szFile, const char[] szTexturePath)
 {
-	char szFullDirectory[PLATFORM_MAX_PATH]; Format(szFullDirectory, PLATFORM_MAX_PATH, "materials\\csgoitems\\sprays\\%s", szDirectory);
-	char szFullFile[PLATFORM_MAX_PATH]; Format(szFullFile, PLATFORM_MAX_PATH, "%s\\%s.vmt", szFullDirectory, szFile);
+	char szFullDirectory[PLATFORM_MAX_PATH]; Format(szFullDirectory, PLATFORM_MAX_PATH, "materials/csgoitemsv2/sprays/%s", szDirectory);
+	char szFullFile[PLATFORM_MAX_PATH]; Format(szFullFile, PLATFORM_MAX_PATH, "%s/%s.vmt", szFullDirectory, szFile);
 	char szPieces[32][PLATFORM_MAX_PATH];
 	char szPath[PLATFORM_MAX_PATH];
 	char szTexturePathFormat[128];
 	//char szOutFile[PLATFORM_MAX_PATH];
 	
-	int iNumPieces = ExplodeString(szFullDirectory, "\\", szPieces, sizeof(szPieces), sizeof(szPieces[]));
+	int iNumPieces = ExplodeString(szFullDirectory, "/", szPieces, sizeof(szPieces), sizeof(szPieces[]));
 	
 	for (int i = 0; i < iNumPieces; i++) {
-		Format(szPath, sizeof(szPath), "%s\\%s", szPath, szPieces[i]);
+		Format(szPath, sizeof(szPath), "%s/%s", szPath, szPieces[i]);
 		
 		if (DirExists(szPath)) {
 			continue;
@@ -1255,13 +1260,13 @@ public void OnMapStart()
 		PrecacheMaterial(g_chPaintInfo[iSkinNum][VMTPATH]);
 	}
 	
-	if(g_bSpraysEnabled) {
+	if (g_bSpraysEnabled) {
 		CSGOItems_LoopSprays(iSprayNum) {
 			AddFileToDownloadsTable(g_chSprayInfo[iSprayNum][VMTPATH]);
 			
 			char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[iSprayNum][VMTPATH]);
 			
-			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials\\", "", false);
+			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials/", "", false);
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
 			
 			PrecacheDecal(szBuffer);
@@ -1283,23 +1288,6 @@ public void OnClientPutInServer(int iClient)
 {
 	SDKHook(iClient, SDKHook_WeaponEquip, OnWeaponEquip_Pre);
 	SDKHook(iClient, SDKHook_WeaponEquipPost, OnWeaponEquip_Post);
-	
-	for (int i = 0; i < 12; i++) {
-		g_iGiveItems[iClient][i] = -1;
-	}
-	
-	g_iGiveCount[iClient] = 0;
-}
-
-public void OnClientDisconnect(int iClient)
-{
-	g_bGivingWeapon[iClient] = false;
-	
-	for (int i = 0; i < 12; i++) {
-		g_iGiveItems[iClient][i] = -1;
-	}
-	
-	g_iGiveCount[iClient] = 0;
 }
 
 public Action OnWeaponEquip_Pre(int iClient, int iWeapon)
@@ -2174,7 +2162,7 @@ public int Native_GetSprayCacheIndexBySprayNum(Handle hPlugin, int iNumParams)
 	char szBuffer[PLATFORM_MAX_PATH];
 	strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[GetNativeCell(1)][VMTPATH]);
 	
-	ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials\\", "", false);
+	ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials/", "", false);
 	ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
 	
 	PrecacheMaterial(szBuffer);
@@ -2193,7 +2181,7 @@ public int Native_GetSprayCacheIndexByDefIndex(Handle hPlugin, int iNumParams)
 		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
 			char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[iSprayNum][VMTPATH]);
 			
-			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials\\", "", false);
+			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials/", "", false);
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
 			
 			PrecacheMaterial(szBuffer);
@@ -2288,10 +2276,15 @@ public int Native_GetItemSetDisplayNameByItemSetNum(Handle hPlugin, int iNumPara
 	return SetNativeString(2, g_chItemSetInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
-public int Native_IsDefIndexKnife(Handle hPlugin, int iNumParams) {
+public int Native_IsDefIndexKnife(Handle hPlugin, int iNumParams)
+{
 	int iDefIndex = GetNativeCell(1);
 	
-	if (iDefIndex <= -1 || iDefIndex > 600) {
+	if (iDefIndex <= -1 || iDefIndex > 700) {
+		if (iDefIndex > 700) {
+			LogError("Warning: DefIndxes may be going higher than 700 now.");
+		}
+		
 		return false;
 	}
 	
@@ -2349,7 +2342,18 @@ public int Native_GetWeaponDefIndexByWeapon(Handle hPlugin, int iNumParams)
 }
 
 public int Native_IsSkinnableDefIndex(Handle hPlugin, int iNumParams) {
-	return g_bIsDefIndexSkinnable[GetNativeCell(1)];
+	int iWeaponDefIndex = GetNativeCell(1);
+	
+	if (iWeaponDefIndex <= -1 || iWeaponDefIndex > 700) {
+		
+		if (iWeaponDefIndex > 700) {
+			LogError("Warning: DefIndxes may be going higher than 700 now.");
+		}
+		
+		return false;
+	}
+	
+	return g_bIsDefIndexSkinnable[iWeaponDefIndex];
 }
 
 public int Native_IsSkinNumGloveApplicable(Handle hPlugin, int iNumParams) {
@@ -2577,12 +2581,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		} else if (iClientTeam == CS_TEAM_CT) {
 			strcopy(szClassName, 48, "weapon_knife");
 		}
-		
-		iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByClassName(szClassName);
-	}
-	
-	if (!bKnife) {
-		g_iGiveItems[iClient][g_iGiveCount[iClient]++] = iWeaponDefIndex;
 	}
 	
 	iWeapon = GivePlayerItem(iClient, szClassName);
@@ -2595,32 +2593,20 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 			
 			if (iWorldModel != -1 && IsValidEdict(iWorldModel) && IsValidEntity(iWorldModel)) {
 				if (!AcceptEntityInput(iWorldModel, "Kill")) {
-					if (!bKnife) {
-						g_iGiveItems[iClient][g_iGiveCount[iClient]] = -1;
-						g_iGiveCount[iClient]--;
-					}
-					
 					return -1;
 				}
 			}
 			
 			if (!AcceptEntityInput(iWeapon, "Kill")) {
-				if (!bKnife) {
-					g_iGiveItems[iClient][g_iGiveCount[iClient]] = -1;
-					g_iGiveCount[iClient]--;
-				}
-				
 				return -1;
 			}
 		}
 		
-		if (!bKnife) {
-			g_iGiveItems[iClient][g_iGiveCount[iClient]] = -1;
-			g_iGiveCount[iClient]--;
-		}
-		
 		return -1;
 	}
+	
+	iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
+	iWeaponNum = CSGOItems_GetWeaponNumByDefIndex(iWeaponDefIndex);
 	
 	bool bSniper = StrEqual(g_szWeaponInfo[iWeaponNum][TYPE], "sniper_rifle", false);
 	
@@ -2735,11 +2721,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	
 	g_bGivingWeapon[iClient] = false;
 	
-	if (!bKnife) {
-		g_iGiveItems[iClient][g_iGiveCount[iClient]] = -1;
-		g_iGiveCount[iClient]--;
-	}
-	
 	Call_StartForward(g_hOnWeaponGiven);
 	Call_PushCell(iClient);
 	Call_PushCell(iWeapon);
@@ -2791,11 +2772,15 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 	
 	int iWeaponArraySize = GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons");
 	
-	for (int i = 0; i < iWeaponArraySize; i++) {
-		if(iWeapon == GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i)) {
-			SetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", -1, i);
-			break;
-		}
+	if (!CSGOItems_DropWeapon(iClient, iWeapon)) {
+		return false;
+		/*
+		for (int i = 0; i < iWeaponArraySize; i++) {
+			if(iWeapon == GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i)) {
+				SetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", -1, i);
+				break;
+			}
+		} */
 	}
 	
 	int iWorldModel = GetEntPropEnt(iWeapon, Prop_Send, "m_hWeaponWorldModel");
