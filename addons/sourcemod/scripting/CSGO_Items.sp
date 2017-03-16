@@ -159,6 +159,8 @@ CHANGELOG
 			- Made sprays feature optional, if you create a spray plugin then you will want to enable the cvar csgoitems_spraysenabled.
 			- Improved weapon removal method.
 			- A few other misc fixes.
+		1.3.7 ~
+			- Update language url.
 			
 ****************************************************************************************************
 INCLUDES
@@ -174,7 +176,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.3.6"
+#define VERSION "1.3.7"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -199,7 +201,7 @@ DEFINES
 #define     VMTPATH			19
 #define     VTFPATH			20
 
-#define 	LANGURL         "https://raw.githubusercontent.com/SteamDatabase/GameTracking-CSGO/master/csgo/resource/csgo_english_utf8.txt"
+#define 	LANGURL         "http://api.fragdeluxe.com/itemdata/csgo_language.php"
 #define 	SCHEMAURL         "http://api.fragdeluxe.com/itemdata/csgo_schema.php"
 
 /****************************************************************************************************
