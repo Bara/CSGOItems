@@ -170,6 +170,13 @@ CHANGELOG
 				- It will now also throw an error if the defindex goes over 700 (Which is the current max size of the cell arrays) Just incase volvo add new weapons eventually.
 			- Removed some left over code and variables which is no longer used.
 			- Fixed WeaponDefIndex and WeaponNum potentially being incorrect inside the CSGOItems_GiveWeapon native.
+		1.3.9 ~
+			- Improved detection for CSGOItems_IsNativeSkin 
+					Example:
+						(BOOL) CSGOItems_IsNativeSkin(iWeaponNum, iSkinNum);
+				
+					Return: True if the skin is for the weapon.
+			- Misc code tweaks / cleanup.
 			
 ****************************************************************************************************
 INCLUDES
@@ -185,7 +192,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.3.8"
+#define VERSION "1.3.9"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -261,15 +268,15 @@ bool g_bSpraysEnabled = false;
 STRINGS.
 *****************************************************************************************************/
 char g_szWeaponInfo[100][22][48];
-char g_chPaintInfo[650][22][96];
-char g_chMusicKitInfo[100][3][48];
-char g_chGlovesInfo[100][22][96];
-char g_chSprayInfo[650][22][128];
-char g_chItemSetInfo[100][3][48];
-char g_chLangPhrases[2198296];
-char g_chSchemaPhrases[2198296];
+char g_szPaintInfo[650][22][96];
+char g_szMusicKitInfo[100][3][48];
+char g_szGlovesInfo[100][22][96];
+char g_szSprayInfo[650][22][128];
+char g_szItemSetInfo[100][3][48];
+char g_szLangPhrases[2198296];
+char g_szSchemaPhrases[2198296];
 
-static char g_chViewSequence1[][] = 
+static char g_szViewSequence1[][] = 
 {
 	"weapon_knife_falchion", "weapon_knife_push", 
 	"weapon_knife_survival_bowie", "weapon_m4a1_silencer"
@@ -631,7 +638,7 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 	Handle hLanguageFile = OpenFile("resource/csgo_english_utf8.txt", "r");
 	Handle hLanguageFileNew = OpenFile("resource/csgo_english_utf8_new.txt", "r");
 	
-	if (hLanguageFileNew != null && ReadFileString(hLanguageFileNew, g_chLangPhrases, 2198296) && StrContains(g_chLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
+	if (hLanguageFileNew != null && ReadFileString(hLanguageFileNew, g_szLangPhrases, 2198296) && StrContains(g_szLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
 		if (hLanguageFile != null) {
 			CloseHandle(hLanguageFile);
 			hLanguageFile = null;
@@ -643,7 +650,7 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 		RenameFile("resource/csgo_english_utf8.txt", "resource/csgo_english_utf8_new.txt");
 	}
 	
-	else if (hLanguageFile != null && ReadFileString(hLanguageFile, g_chLangPhrases, 2198296) && StrContains(g_chLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
+	else if (hLanguageFile != null && ReadFileString(hLanguageFile, g_szLangPhrases, 2198296) && StrContains(g_szLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
 		if (hLanguageFileNew != null) {
 			CloseHandle(hLanguageFileNew);
 			hLanguageFileNew = null;
@@ -745,7 +752,7 @@ public Action Timer_SyncSchema(Handle hTimer, Handle hRequest)
 	Handle hSchemaFile = OpenFile("scripts/items/items_game_fixed.txt", "r");
 	Handle hSchemaFileNew = OpenFile("scripts/items/items_game_fixed_new.txt", "r");
 	
-	if (hSchemaFileNew != null && ReadFileString(hSchemaFileNew, g_chSchemaPhrases, 2198296) && StrContains(g_chSchemaPhrases, "\"items_game\"") != -1) {
+	if (hSchemaFileNew != null && ReadFileString(hSchemaFileNew, g_szSchemaPhrases, 2198296) && StrContains(g_szSchemaPhrases, "\"items_game\"") != -1) {
 		if (hSchemaFile != null) {
 			CloseHandle(hSchemaFile);
 			hSchemaFile = null;
@@ -757,7 +764,7 @@ public Action Timer_SyncSchema(Handle hTimer, Handle hRequest)
 		RenameFile("scripts/items/items_game_fixed.txt", "scripts/items/items_game_fixed_new.txt");
 	}
 	
-	else if (hSchemaFile != null && ReadFileString(hSchemaFile, g_chSchemaPhrases, 2198296) && StrContains(g_chSchemaPhrases, "\"items_game\"") != -1) {
+	else if (hSchemaFile != null && ReadFileString(hSchemaFile, g_szSchemaPhrases, 2198296) && StrContains(g_szSchemaPhrases, "\"items_game\"") != -1) {
 		if (hSchemaFileNew != null) {
 			CloseHandle(hSchemaFileNew);
 			hSchemaFileNew = null;
@@ -839,7 +846,7 @@ public void SyncItemData()
 		SetFailState("Unable to find Item keyvalues");
 	}
 	
-	char szBuffer[48]; char szBuffer2[48]; char szBuffer3[48][48];
+	char szBuffer[128]; char szBuffer2[48]; char szBuffer3[48][48];
 	
 	do {
 		KvGetString(g_hItemsKv, "name", szBuffer2, 48);
@@ -998,13 +1005,13 @@ public void SyncItemData()
 			
 			g_iWeaponCount++;
 		} else {
-			KvGetSectionName(g_hItemsKv, g_chGlovesInfo[g_iGlovesCount][DEFINDEX], 48);
-			strcopy(g_chGlovesInfo[g_iGlovesCount][CLASSNAME], 48, szBuffer2);
+			KvGetSectionName(g_hItemsKv, g_szGlovesInfo[g_iGlovesCount][DEFINDEX], 48);
+			strcopy(g_szGlovesInfo[g_iGlovesCount][CLASSNAME], 48, szBuffer2);
 			
 			KvGetString(g_hItemsKv, "item_name", szBuffer, 48);
-			GetItemName(szBuffer, g_chGlovesInfo[g_iGlovesCount][DISPLAYNAME], 48);
-			KvGetString(g_hItemsKv, "model_player", g_chGlovesInfo[g_iGlovesCount][VIEWMODEL], 96);
-			KvGetString(g_hItemsKv, "model_world", g_chGlovesInfo[g_iGlovesCount][WORLDMODEL], 96);
+			GetItemName(szBuffer, g_szGlovesInfo[g_iGlovesCount][DISPLAYNAME], 48);
+			KvGetString(g_hItemsKv, "model_player", g_szGlovesInfo[g_iGlovesCount][VIEWMODEL], 96);
+			KvGetString(g_hItemsKv, "model_world", g_szGlovesInfo[g_iGlovesCount][WORLDMODEL], 96);
 			
 			g_iGlovesCount++;
 		}
@@ -1024,22 +1031,22 @@ public void SyncItemData()
 			iSkinDefIndex = 1;
 		}
 		
-		strcopy(g_chPaintInfo[g_iPaintCount][DEFINDEX], 48, szBuffer);
+		strcopy(g_szPaintInfo[g_iPaintCount][DEFINDEX], 48, szBuffer);
 		
 		if (iSkinDefIndex == 0) {
-			strcopy(g_chPaintInfo[g_iPaintCount][DISPLAYNAME], 48, "Default");
+			strcopy(g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 48, "Default");
 		} else if (iSkinDefIndex == 1) {
-			strcopy(g_chPaintInfo[g_iPaintCount][DISPLAYNAME], 48, "Vanilla");
+			strcopy(g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 48, "Vanilla");
 		} else {
-			KvGetString(g_hItemsKv, "name", g_chPaintInfo[g_iPaintCount][ITEMNAME], 48);
+			KvGetString(g_hItemsKv, "name", g_szPaintInfo[g_iPaintCount][ITEMNAME], 48);
 			KvGetString(g_hItemsKv, "description_tag", szBuffer, 48);
-			GetItemName(szBuffer, g_chPaintInfo[g_iPaintCount][DISPLAYNAME], 48);
+			GetItemName(szBuffer, g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 48);
 		}
 		
-		KvGetString(g_hItemsKv, "vmt_path", g_chPaintInfo[g_iPaintCount][VMTPATH], 96);
-		PrecacheMaterial(g_chPaintInfo[g_iPaintCount][VMTPATH]);
+		KvGetString(g_hItemsKv, "vmt_path", g_szPaintInfo[g_iPaintCount][VMTPATH], 96);
+		PrecacheMaterial(g_szPaintInfo[g_iPaintCount][VMTPATH]);
 		
-		g_bSkinNumGloveApplicable[g_iPaintCount] = StrContains(g_chPaintInfo[g_iPaintCount][VMTPATH], "paints_gloves", false) != -1;
+		g_bSkinNumGloveApplicable[g_iPaintCount] = StrContains(g_szPaintInfo[g_iPaintCount][VMTPATH], "paints_gloves", false) != -1;
 		
 		if (g_bSkinNumGloveApplicable[g_iPaintCount]) {
 			g_iGlovesPaintCount++;
@@ -1063,9 +1070,9 @@ public void SyncItemData()
 			continue;
 		}
 		
-		strcopy(g_chMusicKitInfo[g_iMusicKitCount][DEFINDEX], 48, szBuffer);
+		strcopy(g_szMusicKitInfo[g_iMusicKitCount][DEFINDEX], 48, szBuffer);
 		KvGetString(g_hItemsKv, "loc_name", szBuffer2, 48);
-		GetItemName(szBuffer2, g_chMusicKitInfo[g_iMusicKitCount][DISPLAYNAME], 48);
+		GetItemName(szBuffer2, g_szMusicKitInfo[g_iMusicKitCount][DISPLAYNAME], 48);
 		
 		g_iMusicKitCount++;
 	} while (KvGotoNextKey(g_hItemsKv)); KvRewind(g_hItemsKv);
@@ -1077,8 +1084,8 @@ public void SyncItemData()
 	}
 	
 	do {
-		KvGetString(g_hItemsKv, "name", g_chItemSetInfo[g_iItemSetCount][CLASSNAME], 48);
-		GetItemName(g_chItemSetInfo[g_iItemSetCount][CLASSNAME], g_chItemSetInfo[g_iItemSetCount][DISPLAYNAME], 48);
+		KvGetString(g_hItemsKv, "name", g_szItemSetInfo[g_iItemSetCount][CLASSNAME], 48);
+		GetItemName(g_szItemSetInfo[g_iItemSetCount][CLASSNAME], g_szItemSetInfo[g_iItemSetCount][DISPLAYNAME], 48);
 		
 		if (KvJumpToKey(g_hItemsKv, "items")) {
 			if (KvGotoFirstSubKey(g_hItemsKv, false)) {
@@ -1087,8 +1094,21 @@ public void SyncItemData()
 					ExplodeString(szBuffer, "]", szBuffer3, 48, 48); ReplaceString(szBuffer3[0], 48, "[", ""); ReplaceString(szBuffer3[1], 48, "]", "");
 					
 					CSGOItems_LoopSkins(iSkin) {
-						if (StrEqual(szBuffer3[0], g_chPaintInfo[iSkin][ITEMNAME])) {
+						if (StrEqual(szBuffer3[0], g_szPaintInfo[iSkin][ITEMNAME])) {
 							g_bIsSkinInSet[g_iItemSetCount][iSkin] = true;
+						}
+					}
+					
+					CSGOItems_LoopWeapons(iWeapon) {
+						if (CSGOItems_GetWeaponClassNameByWeaponNum(iWeapon, szBuffer2, 48)) {
+							if (StrContains(szBuffer, szBuffer2, false) != -1) {
+								
+								CSGOItems_LoopSkins(iSkin) {
+									if (StrContains(szBuffer, g_szPaintInfo[iSkin][ITEMNAME], false) != -1) {
+										g_bIsNativeSkin[iSkin][iWeapon] = true;
+									}
+								}
+							}
 						}
 					}
 				}
@@ -1115,31 +1135,55 @@ public void SyncItemData()
 		
 		KvGetString(g_hItemsKv, "sticker_material", szBuffer, 48);
 		
-		Format(g_chSprayInfo[g_iSprayCount][VTFPATH], PLATFORM_MAX_PATH, "decals/sprays/%s.vtf", szBuffer);
+		Format(g_szSprayInfo[g_iSprayCount][VTFPATH], PLATFORM_MAX_PATH, "decals/sprays/%s.vtf", szBuffer);
 		
 		KvGetString(g_hItemsKv, "item_name", szBuffer2, 48);
 		
 		if (StrEqual(szBuffer2, "#StickerKit_comm01_rekt", false)) {
-			strcopy(g_chSprayInfo[g_iSprayCount][DISPLAYNAME], 48, "Rekt");
+			strcopy(g_szSprayInfo[g_iSprayCount][DISPLAYNAME], 48, "Rekt");
 		} else {
-			GetItemName(szBuffer2, g_chSprayInfo[g_iSprayCount][DISPLAYNAME], 48);
+			GetItemName(szBuffer2, g_szSprayInfo[g_iSprayCount][DISPLAYNAME], 48);
 		}
 		
 		KvGetSectionName(g_hItemsKv, szBuffer2, 48);
-		strcopy(g_chSprayInfo[g_iSprayCount][DEFINDEX], 48, szBuffer2);
+		strcopy(g_szSprayInfo[g_iSprayCount][DEFINDEX], 48, szBuffer2);
 		
 		char szExplode[2][64]; ExplodeString(szBuffer, "/", szExplode, 2, 64);
 		
-		CreateSprayVMT(g_iSprayCount, szExplode[0], szExplode[1], g_chSprayInfo[g_iSprayCount][VTFPATH]);
-		SafePrecacheDecal(g_chSprayInfo[g_iSprayCount][VTFPATH]);
+		CreateSprayVMT(g_iSprayCount, szExplode[0], szExplode[1], g_szSprayInfo[g_iSprayCount][VTFPATH]);
+		SafePrecacheDecal(g_szSprayInfo[g_iSprayCount][VTFPATH]);
 		
 		g_iSprayCount++;
 		
+	} while (KvGotoNextKey(g_hItemsKv)); KvRewind(g_hItemsKv);
+	
+	if (!KvJumpToKey(g_hItemsKv, "alternate_icons2") || !KvGotoFirstSubKey(g_hItemsKv, false) || !KvGotoFirstSubKey(g_hItemsKv, false)) {
+		Call_StartForward(g_hOnPluginEnd);
+		Call_Finish();
+		SetFailState("Unable to find Weapon icons keyvalues");
+	}
+	
+	KvGetSectionName(g_hItemsKv, szBuffer, 48);
+	
+	do {
+		KvGetString(g_hItemsKv, "icon_path", szBuffer, 128);
+		
+		CSGOItems_LoopWeapons(iWeapon) {
+			if (CSGOItems_GetWeaponClassNameByWeaponNum(iWeapon, szBuffer2, 48)) {
+				if (StrContains(szBuffer, szBuffer2, false) != -1) {
+					CSGOItems_LoopSkins(iSkin) {
+						if (StrContains(szBuffer, g_szPaintInfo[iSkin][ITEMNAME], false) != -1) {
+							g_bIsNativeSkin[iSkin][iWeapon] = true;
+						}
+					}
+				}
+			}
+		}
 	} while (KvGotoNextKey(g_hItemsKv)); CloseHandle(g_hItemsKv);
 	
 	CSGOItems_LoopSkins(iSkinNum) {
 		CSGOItems_LoopGloves(iGlovesNum) {
-			strcopy(szBuffer, 64, g_chGlovesInfo[iGlovesNum][CLASSNAME]);
+			strcopy(szBuffer, 64, g_szGlovesInfo[iGlovesNum][CLASSNAME]);
 			
 			if (StrEqual(szBuffer, "leather_handwraps", false)) {
 				strcopy(szBuffer, 64, "handwrap");
@@ -1152,7 +1196,7 @@ public void SyncItemData()
 				continue;
 			}
 			
-			if (StrContains(g_chPaintInfo[iSkinNum][ITEMNAME], szBuffer, false) != -1) {
+			if (StrContains(g_szPaintInfo[iSkinNum][ITEMNAME], szBuffer, false) != -1) {
 				g_bIsNativeSkin[iSkinNum][iGlovesNum] = true;
 			}
 		}
@@ -1217,7 +1261,7 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 		CloseHandle(fFile);
 	}
 	
-	Format(g_chSprayInfo[iSprayNum][VMTPATH], PLATFORM_MAX_PATH, szFullFile);
+	Format(g_szSprayInfo[iSprayNum][VMTPATH], PLATFORM_MAX_PATH, szFullFile);
 	
 	return true;
 }
@@ -1257,14 +1301,14 @@ public void OnMapStart()
 	}
 	
 	CSGOItems_LoopSkins(iSkinNum) {
-		PrecacheMaterial(g_chPaintInfo[iSkinNum][VMTPATH]);
+		PrecacheMaterial(g_szPaintInfo[iSkinNum][VMTPATH]);
 	}
 	
 	if (g_bSpraysEnabled) {
 		CSGOItems_LoopSprays(iSprayNum) {
-			AddFileToDownloadsTable(g_chSprayInfo[iSprayNum][VMTPATH]);
+			AddFileToDownloadsTable(g_szSprayInfo[iSprayNum][VMTPATH]);
 			
-			char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[iSprayNum][VMTPATH]);
+			char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_szSprayInfo[iSprayNum][VMTPATH]);
 			
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials/", "", false);
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
@@ -1302,7 +1346,7 @@ public Action OnWeaponEquip_Post(int iClient, int iWeapon)
 
 stock void GetItemName(char[] chPhrase, char[] szBuffer, int iLength)
 {
-	int iPos = StrContains(g_chLangPhrases, chPhrase[1], false);
+	int iPos = StrContains(g_szLangPhrases, chPhrase[1], false);
 	
 	if (iPos == -1) {
 		strcopy(szBuffer, iLength, "");
@@ -1312,10 +1356,10 @@ stock void GetItemName(char[] chPhrase, char[] szBuffer, int iLength)
 	int iLen = strlen(chPhrase);
 	
 	iPos += iLen + 1;
-	iPos += StrContains(g_chLangPhrases[iPos], "\"") + 1;
-	iLen = StrContains(g_chLangPhrases[iPos], "\"") + 1;
+	iPos += StrContains(g_szLangPhrases[iPos], "\"") + 1;
+	iLen = StrContains(g_szLangPhrases[iPos], "\"") + 1;
 	
-	strcopy(szBuffer, iLen, g_chLangPhrases[iPos]);
+	strcopy(szBuffer, iLen, g_szLangPhrases[iPos]);
 }
 
 stock void GetWeaponClip(char[] szClassName, char[] chReturn, int iLength)
@@ -1602,11 +1646,11 @@ public int Native_GetGlovesViewModelByGlovesNum(Handle hPlugin, int iNumParams)
 		return false;
 	}
 	
-	if (StrEqual(g_chGlovesInfo[iIndex][VIEWMODEL], "", false)) {
+	if (StrEqual(g_szGlovesInfo[iIndex][VIEWMODEL], "", false)) {
 		return false;
 	}
 	
-	return SetNativeString(2, g_chGlovesInfo[iIndex][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szGlovesInfo[iIndex][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_GetGlovesViewModelByDefIndex(Handle hPlugin, int iNumParams)
@@ -1614,13 +1658,13 @@ public int Native_GetGlovesViewModelByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopGloves(iGlovesNum) {
-		if (StringToInt(g_chGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
+		if (StringToInt(g_szGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
 			
-			if (StrEqual(g_chGlovesInfo[iGlovesNum][VIEWMODEL], "", false)) {
+			if (StrEqual(g_szGlovesInfo[iGlovesNum][VIEWMODEL], "", false)) {
 				return false;
 			}
 			
-			return SetNativeString(2, g_chGlovesInfo[iGlovesNum][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+			return SetNativeString(2, g_szGlovesInfo[iGlovesNum][VIEWMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
 	}
 	
@@ -1635,11 +1679,11 @@ public int Native_GetGlovesWorldModelByGlovesNum(Handle hPlugin, int iNumParams)
 		return false;
 	}
 	
-	if (StrEqual(g_chGlovesInfo[iIndex][WORLDMODEL], "", false)) {
+	if (StrEqual(g_szGlovesInfo[iIndex][WORLDMODEL], "", false)) {
 		return false;
 	}
 	
-	return SetNativeString(2, g_chGlovesInfo[iIndex][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szGlovesInfo[iIndex][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_GetGlovesWorldModelByDefIndex(Handle hPlugin, int iNumParams)
@@ -1647,13 +1691,13 @@ public int Native_GetGlovesWorldModelByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopGloves(iGlovesNum) {
-		if (StringToInt(g_chGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
+		if (StringToInt(g_szGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
 			
-			if (StrEqual(g_chGlovesInfo[iGlovesNum][WORLDMODEL], "", false)) {
+			if (StrEqual(g_szGlovesInfo[iGlovesNum][WORLDMODEL], "", false)) {
 				return false;
 			}
 			
-			return SetNativeString(2, g_chGlovesInfo[iGlovesNum][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
+			return SetNativeString(2, g_szGlovesInfo[iGlovesNum][WORLDMODEL], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
 	}
 	
@@ -1961,7 +2005,7 @@ public int Native_GetGlovesNumByClassName(Handle hPlugin, int iNumParams)
 	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
 	
 	CSGOItems_LoopGloves(iGlovesNum) {
-		if (StrEqual(g_chGlovesInfo[iGlovesNum][CLASSNAME], szClassName, false)) {
+		if (StrEqual(g_szGlovesInfo[iGlovesNum][CLASSNAME], szClassName, false)) {
 			return iGlovesNum;
 		}
 	}
@@ -1974,7 +2018,7 @@ public int Native_GetSkinNumByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopSkins(iSkinNum) {
-		if (StringToInt(g_chPaintInfo[iSkinNum][DEFINDEX]) == iDefIndex) {
+		if (StringToInt(g_szPaintInfo[iSkinNum][DEFINDEX]) == iDefIndex) {
 			return iSkinNum;
 		}
 	}
@@ -1987,7 +2031,7 @@ public int Native_GetGlovesNumByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopGloves(iGlovesNum) {
-		if (StringToInt(g_chGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
+		if (StringToInt(g_szGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
 			return iGlovesNum;
 		}
 	}
@@ -2000,7 +2044,7 @@ public int Native_GetSprayNumByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopSprays(iSprayNum) {
-		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
+		if (StringToInt(g_szSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
 			return iSprayNum;
 		}
 	}
@@ -2013,7 +2057,7 @@ public int Native_GetMusicKitNumByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopMusicKits(iMusicKitNum) {
-		if (StringToInt(g_chMusicKitInfo[iMusicKitNum][DEFINDEX]) == iDefIndex) {
+		if (StringToInt(g_szMusicKitInfo[iMusicKitNum][DEFINDEX]) == iDefIndex) {
 			return iMusicKitNum;
 		}
 	}
@@ -2026,7 +2070,7 @@ public int Native_GetItemSetNumByClassName(Handle hPlugin, int iNumParams)
 	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
 	
 	CSGOItems_LoopItemSets(iSetNum) {
-		if (StrEqual(g_chItemSetInfo[iSetNum][CLASSNAME], szClassName, false)) {
+		if (StrEqual(g_szItemSetInfo[iSetNum][CLASSNAME], szClassName, false)) {
 			return iSetNum;
 		}
 	}
@@ -2052,19 +2096,25 @@ public int Native_GetWeaponDefIndexByClassName(Handle hPlugin, int iNumParams)
 }
 
 public int Native_GetSkinDefIndexBySkinNum(Handle hPlugin, int iNumParams) {
-	return StringToInt(g_chPaintInfo[GetNativeCell(1)][DEFINDEX]);
+	int iSkinNum = GetNativeCell(1);
+	
+	if (iSkinNum <= -1 || iSkinNum > g_iPaintCount) {
+		return 0;
+	}
+	
+	return StringToInt(g_szPaintInfo[iSkinNum][DEFINDEX]);
 }
 
 public int Native_GetGlovesDefIndexByGlovesNum(Handle hPlugin, int iNumParams) {
-	return StringToInt(g_chGlovesInfo[GetNativeCell(1)][DEFINDEX]);
+	return StringToInt(g_szGlovesInfo[GetNativeCell(1)][DEFINDEX]);
 }
 
 public int Native_GetSprayDefIndexBySprayNum(Handle hPlugin, int iNumParams) {
-	return StringToInt(g_chSprayInfo[GetNativeCell(1)][DEFINDEX]);
+	return StringToInt(g_szSprayInfo[GetNativeCell(1)][DEFINDEX]);
 }
 
 public int Native_GetMusicKitDefIndexByMusicKitNum(Handle hPlugin, int iNumParams) {
-	return StringToInt(g_chMusicKitInfo[GetNativeCell(1)][DEFINDEX]);
+	return StringToInt(g_szMusicKitInfo[GetNativeCell(1)][DEFINDEX]);
 }
 
 public int Native_GetWeaponClassNameByWeaponNum(Handle hPlugin, int iNumParams) {
@@ -2102,8 +2152,8 @@ public int Native_GetSkinDisplayNameByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopSkins(iSkinNum) {
-		if (StringToInt(g_chPaintInfo[iSkinNum][DEFINDEX]) == iDefIndex) {
-			return SetNativeString(2, g_chPaintInfo[iSkinNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+		if (StringToInt(g_szPaintInfo[iSkinNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_szPaintInfo[iSkinNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
 	}
 	
@@ -2115,8 +2165,8 @@ public int Native_GetSprayDisplayNameByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopSprays(iSprayNum) {
-		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
-			return SetNativeString(2, g_chSprayInfo[iSprayNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+		if (StringToInt(g_szSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_szSprayInfo[iSprayNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
 	}
 	
@@ -2128,8 +2178,8 @@ public int Native_GetSprayVMTByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopSprays(iSprayNum) {
-		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
-			return SetNativeString(2, g_chSprayInfo[iSprayNum][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+		if (StringToInt(g_szSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_szSprayInfo[iSprayNum][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
 	}
 	
@@ -2141,8 +2191,8 @@ public int Native_GetSprayVTFByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopSprays(iSprayNum) {
-		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
-			return SetNativeString(2, g_chSprayInfo[iSprayNum][VTFPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+		if (StringToInt(g_szSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_szSprayInfo[iSprayNum][VTFPATH], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
 	}
 	
@@ -2150,17 +2200,17 @@ public int Native_GetSprayVTFByDefIndex(Handle hPlugin, int iNumParams)
 }
 
 public int Native_GetSprayDisplayNameBySprayNum(Handle hPlugin, int iNumParams) {
-	return SetNativeString(2, g_chSprayInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szSprayInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_GetSprayVMTBySprayNum(Handle hPlugin, int iNumParams) {
-	return SetNativeString(2, g_chSprayInfo[GetNativeCell(1)][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szSprayInfo[GetNativeCell(1)][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_GetSprayCacheIndexBySprayNum(Handle hPlugin, int iNumParams)
 {
 	char szBuffer[PLATFORM_MAX_PATH];
-	strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[GetNativeCell(1)][VMTPATH]);
+	strcopy(szBuffer, PLATFORM_MAX_PATH, g_szSprayInfo[GetNativeCell(1)][VMTPATH]);
 	
 	ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials/", "", false);
 	ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
@@ -2170,7 +2220,7 @@ public int Native_GetSprayCacheIndexBySprayNum(Handle hPlugin, int iNumParams)
 }
 
 public int Native_GetSprayVTFBySprayNum(Handle hPlugin, int iNumParams) {
-	return SetNativeString(2, g_chSprayInfo[GetNativeCell(1)][VTFPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szSprayInfo[GetNativeCell(1)][VTFPATH], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_GetSprayCacheIndexByDefIndex(Handle hPlugin, int iNumParams)
@@ -2178,8 +2228,8 @@ public int Native_GetSprayCacheIndexByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopSprays(iSprayNum) {
-		if (StringToInt(g_chSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
-			char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_chSprayInfo[iSprayNum][VMTPATH]);
+		if (StringToInt(g_szSprayInfo[iSprayNum][DEFINDEX]) == iDefIndex) {
+			char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_szSprayInfo[iSprayNum][VMTPATH]);
 			
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials/", "", false);
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
@@ -2197,8 +2247,8 @@ public int Native_GetGlovesDisplayNameByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopGloves(iGlovesNum) {
-		if (StringToInt(g_chGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
-			return SetNativeString(2, g_chGlovesInfo[iGlovesNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+		if (StringToInt(g_szGlovesInfo[iGlovesNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_szGlovesInfo[iGlovesNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
 	}
 	
@@ -2223,8 +2273,8 @@ public int Native_GetMusicKitDisplayNameByDefIndex(Handle hPlugin, int iNumParam
 	int iDefIndex = GetNativeCell(1);
 	
 	CSGOItems_LoopMusicKits(iMusicKitNum) {
-		if (StringToInt(g_chMusicKitInfo[iMusicKitNum][DEFINDEX]) == iDefIndex) {
-			return SetNativeString(2, g_chMusicKitInfo[iMusicKitNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+		if (StringToInt(g_szMusicKitInfo[iMusicKitNum][DEFINDEX]) == iDefIndex) {
+			return SetNativeString(2, g_szMusicKitInfo[iMusicKitNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
 	}
 	
@@ -2236,8 +2286,8 @@ public int Native_GetItemSetDisplayNameByClassName(Handle hPlugin, int iNumParam
 	char szClassName[48]; GetNativeString(1, szClassName, sizeof(szClassName));
 	
 	CSGOItems_LoopItemSets(iSetNum) {
-		if (StrEqual(g_chItemSetInfo[iSetNum][CLASSNAME], szClassName, false)) {
-			return SetNativeString(2, g_chItemSetInfo[iSetNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+		if (StrEqual(g_szItemSetInfo[iSetNum][CLASSNAME], szClassName, false)) {
+			return SetNativeString(2, g_szItemSetInfo[iSetNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 		}
 	}
 	
@@ -2249,11 +2299,11 @@ public int Native_GetWeaponDisplayNameByWeaponNum(Handle hPlugin, int iNumParams
 }
 
 public int Native_GetSkinDisplayNameBySkinNum(Handle hPlugin, int iNumParams) {
-	return SetNativeString(2, g_chPaintInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szPaintInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_GetSkinVmtPathBySkinNum(Handle hPlugin, int iNumParams) {
-	return SetNativeString(2, g_chPaintInfo[GetNativeCell(1)][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szPaintInfo[GetNativeCell(1)][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_IsNativeSkin(Handle hPlugin, int iNumParams)
@@ -2265,15 +2315,15 @@ public int Native_IsNativeSkin(Handle hPlugin, int iNumParams)
 }
 
 public int Native_GetGlovesDisplayNameByGlovesNum(Handle hPlugin, int iNumParams) {
-	return SetNativeString(2, g_chGlovesInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szGlovesInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_GetMusicKitDisplayNameByMusicKitNum(Handle hPlugin, int iNumParams) {
-	return SetNativeString(2, g_chMusicKitInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szMusicKitInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_GetItemSetDisplayNameByItemSetNum(Handle hPlugin, int iNumParams) {
-	return SetNativeString(2, g_chItemSetInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+	return SetNativeString(2, g_szItemSetInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_IsDefIndexKnife(Handle hPlugin, int iNumParams)
@@ -2281,10 +2331,6 @@ public int Native_IsDefIndexKnife(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	if (iDefIndex <= -1 || iDefIndex > 700) {
-		if (iDefIndex > 700) {
-			LogError("Warning: DefIndxes may be going higher than 700 now.");
-		}
-		
 		return false;
 	}
 	
@@ -2345,11 +2391,6 @@ public int Native_IsSkinnableDefIndex(Handle hPlugin, int iNumParams) {
 	int iWeaponDefIndex = GetNativeCell(1);
 	
 	if (iWeaponDefIndex <= -1 || iWeaponDefIndex > 700) {
-		
-		if (iWeaponDefIndex > 700) {
-			LogError("Warning: DefIndxes may be going higher than 700 now.");
-		}
-		
 		return false;
 	}
 	
@@ -2551,8 +2592,12 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 				fLastShotTime = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_fLastShotTime");
 			}
 			
-			if (StrEqual(g_szWeaponInfo[CSGOItems_GetWeaponNumByClassName(szCurrentClassName)][TYPE], "sniper_rifle", false) && HasEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel")) {
-				iZoomLevel = GetEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel");
+			iWeaponNum = CSGOItems_GetWeaponNumByClassName(szCurrentClassName);
+			
+			if (iWeaponNum > -1) {
+				if (StrEqual(g_szWeaponInfo[iWeaponNum][TYPE], "sniper_rifle", false) && HasEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel")) {
+					iZoomLevel = GetEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel");
+				}
 			}
 			
 			if (!CSGOItems_RemoveWeapon(iClient, iCurrentWeapon)) {
@@ -2608,7 +2653,11 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
 	iWeaponNum = CSGOItems_GetWeaponNumByDefIndex(iWeaponDefIndex);
 	
-	bool bSniper = StrEqual(g_szWeaponInfo[iWeaponNum][TYPE], "sniper_rifle", false);
+	bool bSniper = false;
+	
+	if (iWeaponNum > -1) {
+		bSniper = StrEqual(g_szWeaponInfo[iWeaponNum][TYPE], "sniper_rifle", false);
+	}
 	
 	if (bKnife) {
 		EquipPlayerWeapon(iClient, iWeapon);
@@ -2624,10 +2673,6 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		if (CSGOItems_IsValidWeapon(iSwitchWeapon)) {
 			CSGOItems_SetActiveWeapon(iClient, iSwitchWeapon);
 		}
-	}
-	
-	if (iWeaponTeam > 1 && GetClientTeam(iClient) != iClientTeam) {
-		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iClientTeam);
 	}
 	
 	int iActiveWeapon = CSGOItems_GetActiveWeapon(iClient);
@@ -2701,10 +2746,10 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 			iViewSequence = 0;
 		}
 		
-		int iViewSequences = sizeof(g_chViewSequence1);
+		int iViewSequences = sizeof(g_szViewSequence1);
 		
 		for (int i = 0; i < iViewSequences; i++) {
-			if (!StrEqual(szClassName, g_chViewSequence1[i], false)) {
+			if (!StrEqual(szClassName, g_szViewSequence1[i], false)) {
 				continue;
 			}
 			
@@ -2730,6 +2775,10 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	Call_PushCell(CSGOItems_IsSkinnableDefIndex(iWeaponDefIndex));
 	Call_PushCell(bKnife);
 	Call_Finish();
+	
+	if (iWeaponTeam > 1 && GetClientTeam(iClient) != iClientTeam) {
+		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iClientTeam);
+	}
 	
 	return iWeapon;
 }
@@ -2770,17 +2819,8 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 		return false;
 	}
 	
-	int iWeaponArraySize = GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons");
-	
 	if (!CSGOItems_DropWeapon(iClient, iWeapon)) {
 		return false;
-		/*
-		for (int i = 0; i < iWeaponArraySize; i++) {
-			if(iWeapon == GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i)) {
-				SetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", -1, i);
-				break;
-			}
-		} */
 	}
 	
 	int iWorldModel = GetEntPropEnt(iWeapon, Prop_Send, "m_hWeaponWorldModel");
@@ -3013,7 +3053,7 @@ public int Native_SetAllWeaponsAmmo(Handle hPlugin, int iNumParams)
 }
 
 public int Native_GetRandomSkin(Handle hPlugin, int iNumParams) {
-	return StringToInt(g_chPaintInfo[GetRandomInt(1, g_iPaintCount)][DEFINDEX]);
+	return StringToInt(g_szPaintInfo[GetRandomInt(1, g_iPaintCount)][DEFINDEX]);
 }
 
 stock int PrecacheMaterial(const char[] szMaterial)
