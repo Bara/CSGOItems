@@ -852,12 +852,7 @@ public void SyncItemData()
 		
 		if (StrContains(szBuffer, "hands_paintable") == -1 && StrContains(szBuffer, "hands") == -1) {
 			if (!IsValidWeaponClassName(szBuffer2)) {
-				
-				KvGetString(g_hItemsKv, "item_class", szBuffer2, 48, "none");
-				
-				if (!IsValidWeaponClassName(szBuffer2)) {
-					continue;
-				}
+				continue;
 			}
 			
 			KvGetSectionName(g_hItemsKv, g_szWeaponInfo[g_iWeaponCount][DEFINDEX], 48);
@@ -866,8 +861,6 @@ public void SyncItemData()
 			if (StrEqual(g_szWeaponInfo[g_iWeaponCount][CLASSNAME], "weapon_c4", false)) {
 				g_szWeaponInfo[g_iWeaponCount][TEAM] = "2";
 			}
-			
-			
 			
 			if (StrContains(szBuffer, "melee") != -1) {
 				g_bIsDefIndexKnife[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])] = true;
@@ -2575,7 +2568,8 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	int iRecoilIndex = -1;
 	int iIronSightMode = -1;
 	int iZoomLevel = -1;
-	int iCurrentWeapon = GetPlayerWeaponSlot(iClient, CSGOItems_GetWeaponSlotByClassName(szClassName));
+	int iCurrentSlot = CSGOItems_GetWeaponSlotByClassName(szClassName);
+	int iCurrentWeapon = GetPlayerWeaponSlot(iClient, iCurrentSlot);
 	int iHudFlags = GetEntProp(iClient, Prop_Send, "m_iHideHUD");
 	
 	float fNextPlayerAttackTime = GetEntPropFloat(iClient, Prop_Send, "m_flNextAttack");
@@ -2646,9 +2640,11 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 				g_bGivingWeapon[iClient] = false;
 				return -1;
 			}
-		} else if (!CSGOItems_RemoveKnife(iClient)) {
-			g_bGivingWeapon[iClient] = false;
-			return -1;
+		} else {
+			if(!CSGOItems_RemoveKnife(iClient)) {
+				g_bGivingWeapon[iClient] = false;
+				return -1;
+			}
 		}
 	} else {
 		bKnife = CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByClassName(szClassName));
