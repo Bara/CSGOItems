@@ -835,14 +835,12 @@ public void SyncItemData()
 	if (!FileToKeyValues(g_hItemsKv, "scripts/items/items_game_fixed.txt")) {
 		Call_StartForward(g_hOnPluginEnd);
 		Call_Finish();
-		LogError("Unable to Process Item Schema");
 		SetFailState("Unable to Process Item Schema");
 	} KvRewind(g_hItemsKv);
 	
 	if (!KvJumpToKey(g_hItemsKv, "items") || !KvGotoFirstSubKey(g_hItemsKv, false)) {
 		Call_StartForward(g_hOnPluginEnd);
 		Call_Finish();
-		LogError("Unable to find Item keyvalues");
 		SetFailState("Unable to find Item keyvalues");
 	}
 	
@@ -854,7 +852,12 @@ public void SyncItemData()
 		
 		if (StrContains(szBuffer, "hands_paintable") == -1 && StrContains(szBuffer, "hands") == -1) {
 			if (!IsValidWeaponClassName(szBuffer2)) {
-				continue;
+				
+				KvGetString(g_hItemsKv, "item_class", szBuffer2, 48, "none");
+				
+				if (!IsValidWeaponClassName(szBuffer2)) {
+					continue;
+				}
 			}
 			
 			KvGetSectionName(g_hItemsKv, g_szWeaponInfo[g_iWeaponCount][DEFINDEX], 48);
@@ -863,6 +866,8 @@ public void SyncItemData()
 			if (StrEqual(g_szWeaponInfo[g_iWeaponCount][CLASSNAME], "weapon_c4", false)) {
 				g_szWeaponInfo[g_iWeaponCount][TEAM] = "2";
 			}
+			
+			
 			
 			if (StrContains(szBuffer, "melee") != -1) {
 				g_bIsDefIndexKnife[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])] = true;
@@ -1093,19 +1098,28 @@ public void SyncItemData()
 					KvGetSectionName(g_hItemsKv, szBuffer, 48);
 					ExplodeString(szBuffer, "]", szBuffer3, 48, 48); ReplaceString(szBuffer3[0], 48, "[", ""); ReplaceString(szBuffer3[1], 48, "]", "");
 					
-					CSGOItems_LoopSkins(iSkin) {
-						if (StrEqual(szBuffer3[0], g_szPaintInfo[iSkin][ITEMNAME])) {
-							g_bIsSkinInSet[g_iItemSetCount][iSkin] = true;
+					CSGOItems_LoopSkins(iSkinNum) {
+						if (StrEqual(szBuffer3[0], g_szPaintInfo[iSkinNum][ITEMNAME])) {
+							g_bIsSkinInSet[g_iItemSetCount][iSkinNum] = true;
 						}
 					}
 					
-					CSGOItems_LoopWeapons(iWeapon) {
-						if (CSGOItems_GetWeaponClassNameByWeaponNum(iWeapon, szBuffer2, 48)) {
+					CSGOItems_LoopWeapons(iWeaponNum) {
+						if (CSGOItems_GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
 							if (StrContains(szBuffer, szBuffer2, false) != -1) {
 								
-								CSGOItems_LoopSkins(iSkin) {
-									if (StrContains(szBuffer, g_szPaintInfo[iSkin][ITEMNAME], false) != -1) {
-										g_bIsNativeSkin[iSkin][iWeapon] = true;
+								CSGOItems_LoopSkins(iSkinNum) {
+									if (StrContains(szBuffer, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
+										g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
+									}
+								}
+							} else if (ReplaceString(szBuffer2, 48, "weapon_", "", false) > 0) {
+								if (StrContains(szBuffer, szBuffer2, false) != -1) {
+									
+									CSGOItems_LoopSkins(iSkinNum) {
+										if (StrContains(szBuffer, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
+											g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
+										}
 									}
 								}
 							}
@@ -1163,25 +1177,53 @@ public void SyncItemData()
 		SetFailState("Unable to find Weapon icons keyvalues");
 	}
 	
-	KvGetSectionName(g_hItemsKv, szBuffer, 48);
-	
 	do {
 		KvGetString(g_hItemsKv, "icon_path", szBuffer, 128);
 		
-		CSGOItems_LoopWeapons(iWeapon) {
-			if (CSGOItems_GetWeaponClassNameByWeaponNum(iWeapon, szBuffer2, 48)) {
+		CSGOItems_LoopWeapons(iWeaponNum) {
+			if (CSGOItems_GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
 				if (StrContains(szBuffer, szBuffer2, false) != -1) {
-					CSGOItems_LoopSkins(iSkin) {
-						if (StrContains(szBuffer, g_szPaintInfo[iSkin][ITEMNAME], false) != -1) {
-							g_bIsNativeSkin[iSkin][iWeapon] = true;
+					CSGOItems_LoopSkins(iSkinNum) {
+						if (StrContains(szBuffer, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
+							g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
+						}
+					}
+				} else if (ReplaceString(szBuffer2, 48, "weapon_", "", false) > 0) {
+					if (StrContains(szBuffer, szBuffer2, false) != -1) {
+						CSGOItems_LoopSkins(iSkinNum) {
+							if (StrContains(szBuffer, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
+								g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
+							}
 						}
 					}
 				}
 			}
 		}
+	} while (KvGotoNextKey(g_hItemsKv)); KvRewind(g_hItemsKv);
+	
+	if (!KvJumpToKey(g_hItemsKv, "paint_kits_rarity")) {
+		Call_StartForward(g_hOnPluginEnd);
+		Call_Finish();
+		SetFailState("Unable to find Paint rarity keyvalues");
+	}
+	
+	do {
+		CSGOItems_LoopSkins(iSkinNum) {
+			KvGetString(g_hItemsKv, g_szPaintInfo[iSkinNum][ITEMNAME], g_szPaintInfo[iSkinNum][RARITY], 128);
+		}
 	} while (KvGotoNextKey(g_hItemsKv)); CloseHandle(g_hItemsKv);
 	
 	CSGOItems_LoopSkins(iSkinNum) {
+		CSGOItems_LoopWeapons(iWeaponNum) {
+			if (CSGOItems_GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer, 48)) {
+				if (ReplaceString(szBuffer, 48, "weapon_", "", false) > 0) {
+					if(StrContains(g_szPaintInfo[iSkinNum][ITEMNAME], szBuffer, false) != -1) {
+						g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
+					}
+				}
+			}
+		}
+		
 		CSGOItems_LoopGloves(iGlovesNum) {
 			strcopy(szBuffer, 64, g_szGlovesInfo[iGlovesNum][CLASSNAME]);
 			
