@@ -177,6 +177,9 @@ CHANGELOG
 				
 					Return: True if the skin is for the weapon.
 			- Misc code tweaks / cleanup.
+		1.4.0 ~
+			- Improved knife sequence manipulation in CSGOItems_GiveWeapon 
+			- Fixed a potential visual glitch in CSGOItems_DropWeapon
 			
 ****************************************************************************************************
 INCLUDES
@@ -192,7 +195,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.3.9"
+#define VERSION "1.4.0"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -275,12 +278,6 @@ char g_szSprayInfo[650][22][128];
 char g_szItemSetInfo[100][3][48];
 char g_szLangPhrases[2198296];
 char g_szSchemaPhrases[2198296];
-
-static char g_szViewSequence1[][] = 
-{
-	"weapon_knife_falchion", "weapon_knife_push", 
-	"weapon_knife_survival_bowie", "weapon_m4a1_silencer"
-};
 
 /****************************************************************************************************
 INTS.
@@ -1210,7 +1207,7 @@ public void SyncItemData()
 		CSGOItems_LoopWeapons(iWeaponNum) {
 			if (CSGOItems_GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer, 48)) {
 				if (ReplaceString(szBuffer, 48, "weapon_", "", false) > 0) {
-					if(StrContains(g_szPaintInfo[iSkinNum][ITEMNAME], szBuffer, false) != -1) {
+					if (StrContains(g_szPaintInfo[iSkinNum][ITEMNAME], szBuffer, false) != -1) {
 						g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
 					}
 				}
@@ -2641,7 +2638,7 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 				return -1;
 			}
 		} else {
-			if(!CSGOItems_RemoveKnife(iClient)) {
+			if (!CSGOItems_RemoveKnife(iClient)) {
 				g_bGivingWeapon[iClient] = false;
 				return -1;
 			}
@@ -2779,25 +2776,40 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	
 	else if (iActiveWeapon == iWeapon && iSwitchWeapon == iWeapon) {
 		if (bKnife) {
-			iViewSequence = 2;
+			switch (iWeaponDefIndex) {
+				case 515 :  {  // Butterfly
+					iViewSequence = SEQUENCE_BUTTERFLY_IDLE1;
+				}
+				
+				case 512 :  {  // Falchion
+					iViewSequence = SEQUENCE_FALCHION_IDLE1;
+				}
+				
+				case 516: {  // Butt Plugs
+					iViewSequence = SEQUENCE_DAGGERS_IDLE1;
+				}
+				
+				case 514: {  // Bowie
+					iViewSequence = SEQUENCE_BOWIE_IDLE1;
+				}
+				
+				default: {
+					iViewSequence = SEQUENCE_DEFAULT_IDLE2;
+				}
+			}
+		} else if (StrEqual(szClassName, "weapon_m4a1_silencer", false)) {
+			iViewSequence = 1;
 		} else {
 			iViewSequence = 0;
-		}
-		
-		int iViewSequences = sizeof(g_szViewSequence1);
-		
-		for (int i = 0; i < iViewSequences; i++) {
-			if (!StrEqual(szClassName, g_szViewSequence1[i], false)) {
-				continue;
-			}
-			
-			iViewSequence = 1;
-			break;
 		}
 	}
 	
 	if (iActiveWeapon == iWeapon) {
-		SetEntProp(GetEntPropEnt(iClient, Prop_Send, "m_hViewModel"), Prop_Send, "m_nSequence", iViewSequence);
+		int iPVM = GetEntPropEnt(iClient, Prop_Send, "m_hViewModel");
+		
+		if(IsValidEntity(iPVM)) {
+			SetEntProp(iPVM, Prop_Send, "m_nSequence", iViewSequence);
+		}
 	}
 	
 	SetEntProp(iClient, Prop_Send, "m_iHideHUD", iHudFlags);
@@ -2919,7 +2931,11 @@ public int Native_DropWeapon(Handle hPlugin, int iNumParams)
 		SetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity", iClient);
 	}
 	
-	CS_DropWeapon(iClient, iWeapon, false);
+	if(iWeapon == CSGOItems_GetActiveWeapon(iClient)) {
+		SetEntPropEnt(iClient, Prop_Send, "m_hActiveWeapon", -1);
+	}
+	
+	CS_DropWeapon(iClient, iWeapon, false, true);
 	
 	if (iOwnerEntity != iClient) {
 		SetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity", iOwnerEntity);
