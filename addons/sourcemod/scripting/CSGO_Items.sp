@@ -180,6 +180,16 @@ CHANGELOG
 		1.4.0 ~
 			- Improved knife sequence manipulation in CSGOItems_GiveWeapon 
 			- Fixed a potential visual glitch in CSGOItems_DropWeapon
+		1.4.1 ~
+			- Optimized & cleaned CSGOItems_GiveWeapon.
+			- Added anti GLST ban.
+				- Added alternative methods for giving knives which evade GLST bans.
+				- Added PTAH detection, if PTAH is installed then it will be used to give knives.
+				- Added FollowGuideLines detection (Thanks ESK0 for the string help).
+			- Added CSGOItems_RespawnWeapon & CSGOItems_RespawnWeaponBySlot (Thanks ESK0 for suggestion)
+				- Example: CSGOItems_RespawnWeapon(iClient, iWeapon);
+				- Example: CSGOItems_RespawnWeaponBySlot(iClient, CS_SLOT_KNIFE);
+			- Fixed a couple of scenarios where CSGOItems_GiveWeapon could fail improperly.
 			
 ****************************************************************************************************
 INCLUDES
@@ -192,10 +202,13 @@ INCLUDES
 #include <SteamWorks> 
 #include <autoexecconfig> 
 
+#undef REQUIRE_EXTENSIONS
+#tryinclude <ptah>
+
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.4.0"
+#define VERSION "1.4.1"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -266,6 +279,9 @@ bool g_bIsSkinInSet[100][650];
 bool g_bSteamWorksLoaded = false;
 bool g_bRoundEnd = false;
 bool g_bSpraysEnabled = false;
+bool g_bPTAH = false;
+bool g_bSpawnItemFromDefIndex = false;
+bool g_bFollowGuidelines = false;
 
 /****************************************************************************************************
 STRINGS.
@@ -328,10 +344,6 @@ public void OnPluginStart()
 	
 	CloseHandle(hConfig);
 	
-	CSGOItems_LoopValidClients(iClient) {
-		OnClientPutInServer(iClient);
-	}
-	
 	HookEvent("player_death", Event_PlayerDeath);
 	HookEvent("round_poststart", OnRoundStart, EventHookMode_Post);
 	HookEvent("round_end", OnRoundEnd, EventHookMode_Pre);
@@ -340,6 +352,9 @@ public void OnPluginStart()
 	g_hCvarSpraysEnabled = AutoExecConfig_CreateConVar("csgoitems_spraysenabled", "0", "Should CSGO Items add support for sprays / make clients download them?");
 	g_hCvarSpraysEnabled.AddChangeHook(OnCvarChanged);
 	AutoExecConfig_CleanFile(); AutoExecConfig_ExecuteFile();
+	
+	g_bPTAH = LibraryExists("PTaH");
+	g_bSpawnItemFromDefIndex = g_bPTAH ? GetFeatureStatus(FeatureType_Native, "PTaH_SpawnItemFromDefIndex") == FeatureStatus_Available : false;
 }
 
 public void OnCvarChanged(ConVar hConVar, const char[] szOldValue, const char[] szNewValue)
@@ -365,12 +380,18 @@ public void OnLibraryAdded(const char[] szName) {
 	if (StrEqual(szName, "SteamWorks")) {
 		g_bSteamWorksLoaded = true;
 		RetrieveLanguage();
+	} else if (StrEqual(szName, "PTaH")) {
+		g_bPTAH = true;
+		g_bSpawnItemFromDefIndex = GetFeatureStatus(FeatureType_Native, "PTaH_SpawnItemFromDefIndex") == FeatureStatus_Available;
 	}
 }
 
 public void OnLibraryRemoved(const char[] szName) {
 	if (StrEqual(szName, "SteamWorks")) {
 		g_bSteamWorksLoaded = false;
+	} else if (StrEqual(szName, "PTaH")) {
+		g_bPTAH = false;
+		g_bSpawnItemFromDefIndex = false;
 	}
 }
 
@@ -477,6 +498,8 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] chError, int iEr
 	CreateNative("CSGOItems_FindWeaponByClassName", Native_FindWeaponByClassName);
 	CreateNative("CSGOItems_IsValidWeapon", Native_IsValidWeapon);
 	CreateNative("CSGOItems_GiveWeapon", Native_GiveWeapon);
+	CreateNative("CSGOItems_RespawnWeapon", Native_RespawnWeapon);
+	CreateNative("CSGOItems_RespawnWeaponBySlot", Native_RespawnWeaponBySlot);
 	CreateNative("CSGOItems_RemoveWeapon", Native_RemoveWeapon);
 	CreateNative("CSGOItems_DropWeapon", Native_DropWeapon);
 	CreateNative("CSGOItems_RemoveAllWeapons", Native_RemoveAllWeapons);
@@ -496,7 +519,6 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] chError, int iEr
 	// Skin Display Names
 	CreateNative("CSGOItems_GetSkinDisplayNameByDefIndex", Native_GetSkinDisplayNameByDefIndex);
 	CreateNative("CSGOItems_GetSkinDisplayNameBySkinNum", Native_GetSkinDisplayNameBySkinNum);
-	
 	
 	// Misc
 	CreateNative("CSGOItems_IsSkinnableDefIndex", Native_IsSkinnableDefIndex);
@@ -1322,8 +1344,30 @@ public int Uploaded_File(const char[] sTarget, const char[] sLocalFile, const ch
 }
 */
 
-public void OnConfigsExecuted() {
+public void OnConfigsExecuted()
+{
 	g_bSpraysEnabled = g_hCvarSpraysEnabled.BoolValue;
+	
+	char szBuffer[10000];
+	BuildPath(Path_SM, szBuffer, sizeof(szBuffer), "configs/core.cfg");
+	
+	File fFile = OpenFile(szBuffer, "r");
+	
+	if (fFile == null) {
+		return;
+	}
+	
+	while (fFile.ReadLine(szBuffer, sizeof(szBuffer))) {
+		if (StrContains(szBuffer, "\"FollowCSGOServerGuidelines\"", false) == -1) {
+			continue;
+		}
+		
+		ReplaceString(szBuffer, sizeof(szBuffer), "\"FollowCSGOServerGuidelines\"", ""); TrimString(szBuffer); StripQuotes(szBuffer);
+		g_bFollowGuidelines = StrContains(szBuffer, "yes", false) != -1;
+		break;
+	}
+	
+	delete fFile;
 }
 
 public void OnMapStart()
@@ -1357,22 +1401,6 @@ public Action Event_PlayerDeath(Handle hEvent, const char[] szName, bool bDontBr
 	
 	g_bGivingWeapon[iClient] = false;
 	
-	return Plugin_Continue;
-}
-
-public void OnClientPutInServer(int iClient)
-{
-	SDKHook(iClient, SDKHook_WeaponEquip, OnWeaponEquip_Pre);
-	SDKHook(iClient, SDKHook_WeaponEquipPost, OnWeaponEquip_Post);
-}
-
-public Action OnWeaponEquip_Pre(int iClient, int iWeapon)
-{
-	return Plugin_Continue;
-}
-
-public Action OnWeaponEquip_Post(int iClient, int iWeapon)
-{
 	return Plugin_Continue;
 }
 
@@ -2548,15 +2576,19 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 		return -1;
 	}
 	
-	int iViewSequence = GetEntProp(GetEntPropEnt(iClient, Prop_Send, "m_hViewModel"), Prop_Send, "m_nSequence");
+	int iViewModel = GetEntPropEnt(iClient, Prop_Send, "m_hViewModel");
+	int iViewSequence = -1;
+	
+	if (iViewModel != -1 && IsValidEntity(iViewModel)) {
+		iViewSequence = GetEntProp(iViewModel, Prop_Send, "m_nSequence");
+	}
 	
 	if (!IsValidWeaponClassName(szClassName)) {
 		return -1;
 	}
 	
 	int iWeaponTeam = CSGOItems_GetWeaponTeamByClassName(szClassName);
-	int iWeaponNum = CSGOItems_GetWeaponNumByClassName(szClassName);
-	int iWeaponDefIndex = -1;
+	int iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByClassName(szClassName);
 	int iLookingAtWeapon = GetEntProp(iClient, Prop_Send, "m_bIsLookingAtWeapon");
 	int iHoldingLookAtWeapon = GetEntProp(iClient, Prop_Send, "m_bIsHoldingLookAtWeapon");
 	int iReloadVisuallyComplete = -1;
@@ -2578,11 +2610,10 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	float fLastShotTime = 0.0;
 	
 	char szCurrentClassName[48];
-	bool bKnife = false;
+	bool bKnife = CSGOItems_IsDefIndexKnife(iWeaponDefIndex);
 	
 	if (CSGOItems_IsValidWeapon(iCurrentWeapon)) {
 		CSGOItems_GetWeaponClassNameByWeapon(iCurrentWeapon, szCurrentClassName, 48);
-		iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iCurrentWeapon);
 		
 		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_flNextPrimaryAttack")) {
 			fNextPrimaryAttack = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_flNextPrimaryAttack");
@@ -2600,51 +2631,41 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 			fAccuracyPenalty = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_fAccuracyPenalty");
 		}
 		
-		bKnife = CSGOItems_IsDefIndexKnife(iWeaponDefIndex);
+		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_bReloadVisuallyComplete")) {
+			iReloadVisuallyComplete = GetEntProp(iCurrentWeapon, Prop_Send, "m_bReloadVisuallyComplete");
+		}
+		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_bSilencerOn")) {
+			iWeaponSilencer = GetEntProp(iCurrentWeapon, Prop_Send, "m_bSilencerOn");
+		}
+		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_weaponMode")) {
+			iWeaponMode = GetEntProp(iCurrentWeapon, Prop_Send, "m_weaponMode");
+		}
+		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_iRecoilIndex")) {
+			iRecoilIndex = GetEntProp(iCurrentWeapon, Prop_Send, "m_iRecoilIndex");
+		}
+		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_iIronSightMode")) {
+			iIronSightMode = GetEntProp(iCurrentWeapon, Prop_Send, "m_iIronSightMode");
+		}
+		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_flDoneSwitchingSilencer")) {
+			fDoneSwitchingSilencer = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_flDoneSwitchingSilencer");
+		}
+		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_fLastShotTime")) {
+			fLastShotTime = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_fLastShotTime");
+		}
 		
-		if (!bKnife) {
-			if (HasEntProp(iCurrentWeapon, Prop_Send, "m_bReloadVisuallyComplete")) {
-				iReloadVisuallyComplete = GetEntProp(iCurrentWeapon, Prop_Send, "m_bReloadVisuallyComplete");
-			}
-			if (HasEntProp(iCurrentWeapon, Prop_Send, "m_bSilencerOn")) {
-				iWeaponSilencer = GetEntProp(iCurrentWeapon, Prop_Send, "m_bSilencerOn");
-			}
-			if (HasEntProp(iCurrentWeapon, Prop_Send, "m_weaponMode")) {
-				iWeaponMode = GetEntProp(iCurrentWeapon, Prop_Send, "m_weaponMode");
-			}
-			if (HasEntProp(iCurrentWeapon, Prop_Send, "m_iRecoilIndex")) {
-				iRecoilIndex = GetEntProp(iCurrentWeapon, Prop_Send, "m_iRecoilIndex");
-			}
-			if (HasEntProp(iCurrentWeapon, Prop_Send, "m_iIronSightMode")) {
-				iIronSightMode = GetEntProp(iCurrentWeapon, Prop_Send, "m_iIronSightMode");
-			}
-			if (HasEntProp(iCurrentWeapon, Prop_Send, "m_flDoneSwitchingSilencer")) {
-				fDoneSwitchingSilencer = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_flDoneSwitchingSilencer");
-			}
-			if (HasEntProp(iCurrentWeapon, Prop_Send, "m_fLastShotTime")) {
-				fLastShotTime = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_fLastShotTime");
-			}
-			
-			iWeaponNum = CSGOItems_GetWeaponNumByClassName(szCurrentClassName);
-			
-			if (iWeaponNum > -1) {
-				if (StrEqual(g_szWeaponInfo[iWeaponNum][TYPE], "sniper_rifle", false) && HasEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel")) {
-					iZoomLevel = GetEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel");
-				}
-			}
-			
-			if (!CSGOItems_RemoveWeapon(iClient, iCurrentWeapon)) {
-				g_bGivingWeapon[iClient] = false;
-				return -1;
-			}
-		} else {
+		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel")) {
+			iZoomLevel = GetEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel");
+		}
+		
+		if (bKnife) {
 			if (!CSGOItems_RemoveKnife(iClient)) {
 				g_bGivingWeapon[iClient] = false;
 				return -1;
 			}
+		} else if (!CSGOItems_RemoveWeapon(iClient, iCurrentWeapon)) {
+			g_bGivingWeapon[iClient] = false;
+			return -1;
 		}
-	} else {
-		bKnife = CSGOItems_IsDefIndexKnife(CSGOItems_GetWeaponDefIndexByClassName(szClassName));
 	}
 	
 	if (iClientTeam != iWeaponTeam && iWeaponTeam > 1) {
@@ -2654,45 +2675,73 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	g_bGivingWeapon[iClient] = true;
 	
 	int iWeapon = -1;
+	bool bGiven = false;
 	
-	if (bKnife) {
-		if (iClientTeam == CS_TEAM_T) {
-			strcopy(szClassName, 48, "weapon_knife_t");
-		} else if (iClientTeam == CS_TEAM_CT) {
-			strcopy(szClassName, 48, "weapon_knife");
+	if (g_bPTAH) {
+		#if defined _PTaH_included
+		if (g_bSpawnItemFromDefIndex && bKnife) {
+			float fVecOrigin[3]; GetClientAbsOrigin(iClient, fVecOrigin);
+			iWeapon = PTaH_SpawnItemFromDefIndex(iWeaponDefIndex, fVecOrigin);
+			
+			if (IsValidEntity(iWeapon)) {
+				bGiven = view_as<bool>(PTaH_GetEconItemViewFromWeapon(iWeapon));
+			} else {
+				bGiven = false;
+			}
+		} else {
+			bGiven = false;
+		}
+		#else
+		bGiven = false;
+		#endif
+	} else if (bKnife) {
+		if (g_bFollowGuidelines) {
+			iWeapon = CreateEntityByName("weapon_knife");
+			
+			if (!IsValidEntity(iWeapon)) {
+				bGiven = false;
+			} else {
+				SetEntProp(iWeapon, Prop_Send, "m_iItemIDLow", -1);
+				SetEntProp(iWeapon, Prop_Send, "m_iAccountID", GetSteamAccountID(iClient));
+				SetEntProp(iWeapon, Prop_Send, "m_iItemDefinitionIndex", iWeaponDefIndex);
+				SetEntProp(iWeapon, Prop_Send, "m_bInitialized", 1);
+				
+				bGiven = DispatchSpawn(iWeapon);
+			}
 		}
 	}
 	
-	iWeapon = GivePlayerItem(iClient, szClassName);
+	if (!bGiven) {
+		if (bKnife && g_bFollowGuidelines) {
+			strcopy(szClassName, 48, iClientTeam == CS_TEAM_T ? "weapon_knife_t" : "weapon_knife");
+		}
+		
+		iWeapon = GivePlayerItem(iClient, szClassName);
+		
+		bGiven = iWeapon != -1;
+	}
 	
-	if (!CSGOItems_IsValidWeapon(iWeapon)) {
+	if (!CSGOItems_IsValidWeapon(iWeapon) || !bGiven) {
+		if (iWeaponTeam > 1 && GetClientTeam(iClient) != iClientTeam) {
+			SetEntProp(iClient, Prop_Send, "m_iTeamNum", iClientTeam);
+		}
+		
 		g_bGivingWeapon[iClient] = false;
 		
 		if (iWeapon != -1 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
 			int iWorldModel = GetEntPropEnt(iWeapon, Prop_Send, "m_hWeaponWorldModel");
 			
 			if (iWorldModel != -1 && IsValidEdict(iWorldModel) && IsValidEntity(iWorldModel)) {
-				if (!AcceptEntityInput(iWorldModel, "Kill")) {
-					return -1;
-				}
+				AcceptEntityInput(iWorldModel, "Kill");
 			}
 			
-			if (!AcceptEntityInput(iWeapon, "Kill")) {
-				return -1;
-			}
+			AcceptEntityInput(iWeapon, "Kill");
 		}
 		
 		return -1;
 	}
 	
 	iWeaponDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
-	iWeaponNum = CSGOItems_GetWeaponNumByDefIndex(iWeaponDefIndex);
-	
-	bool bSniper = false;
-	
-	if (iWeaponNum > -1) {
-		bSniper = StrEqual(g_szWeaponInfo[iWeaponNum][TYPE], "sniper_rifle", false);
-	}
 	
 	if (bKnife) {
 		EquipPlayerWeapon(iClient, iWeapon);
@@ -2712,107 +2761,113 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	
 	int iActiveWeapon = CSGOItems_GetActiveWeapon(iClient);
 	
-	if (StrEqual(szClassName, szCurrentClassName, false) && iActiveWeapon == iWeapon && iSwitchWeapon == iWeapon) {
-		if (iLookingAtWeapon > -1) {
-			SetEntProp(iClient, Prop_Send, "m_bIsLookingAtWeapon", iLookingAtWeapon);
-		}
-		
-		if (iHoldingLookAtWeapon > -1) {
-			SetEntProp(iClient, Prop_Send, "m_bIsHoldingLookAtWeapon", iHoldingLookAtWeapon);
-		}
-		
-		if (fNextPlayerAttackTime > 0.0) {
-			SetEntPropFloat(iClient, Prop_Send, "m_flNextAttack", fNextPlayerAttackTime);
-		}
-		
-		if (fNextPrimaryAttack > 0.0) {
-			SetEntPropFloat(iWeapon, Prop_Send, "m_flNextPrimaryAttack", fNextPrimaryAttack);
-		}
-		
-		if (fNextSecondaryAttack > 0.0) {
-			SetEntPropFloat(iWeapon, Prop_Send, "m_flNextSecondaryAttack", fNextSecondaryAttack);
-		}
-		
-		if (fTimeWeaponIdle > 0.0) {
-			SetEntPropFloat(iWeapon, Prop_Send, "m_flTimeWeaponIdle", fTimeWeaponIdle);
-		}
-		
-		if (fAccuracyPenalty > 0.0) {
-			SetEntPropFloat(iWeapon, Prop_Send, "m_fAccuracyPenalty", fAccuracyPenalty);
-		}
-		
-		if (fDoneSwitchingSilencer > 0.0) {
-			SetEntPropFloat(iWeapon, Prop_Send, "m_flDoneSwitchingSilencer", fDoneSwitchingSilencer);
-		}
-		
-		if (fLastShotTime > 0.0) {
-			SetEntPropFloat(iWeapon, Prop_Send, "m_fLastShotTime", fLastShotTime);
-		}
-		
-		if (iReloadVisuallyComplete > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_bReloadVisuallyComplete", iReloadVisuallyComplete);
-		}
-		
-		if (iWeaponSilencer > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_bSilencerOn", iWeaponSilencer);
-		}
-		
-		if (iWeaponMode > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_weaponMode", iWeaponMode);
-		}
-		
-		if (iRecoilIndex > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_iRecoilIndex", iRecoilIndex);
-		}
-		
-		if (iIronSightMode > -1) {
-			SetEntProp(iWeapon, Prop_Send, "m_iIronSightMode", iIronSightMode);
-		}
-		
-		if (iZoomLevel > -1 && bSniper) {
-			SetEntProp(iWeapon, Prop_Send, "m_zoomLevel", iZoomLevel);
-		}
-	}
-	
-	else if (iActiveWeapon == iWeapon && iSwitchWeapon == iWeapon) {
-		if (bKnife) {
-			switch (iWeaponDefIndex) {
-				case 515 :  {  // Butterfly
-					iViewSequence = SEQUENCE_BUTTERFLY_IDLE1;
+	if (iActiveWeapon == iWeapon) {
+		if (iSwitchWeapon == iWeapon) {
+			if (StrEqual(szClassName, szCurrentClassName, false)) {
+				if (iLookingAtWeapon > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_bIsLookingAtWeapon")) {
+					SetEntProp(iClient, Prop_Send, "m_bIsLookingAtWeapon", iLookingAtWeapon);
 				}
 				
-				case 512 :  {  // Falchion
-					iViewSequence = SEQUENCE_FALCHION_IDLE1;
+				if (iHoldingLookAtWeapon > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_bIsHoldingLookAtWeapon")) {
+					SetEntProp(iClient, Prop_Send, "m_bIsHoldingLookAtWeapon", iHoldingLookAtWeapon);
 				}
 				
-				case 516: {  // Butt Plugs
-					iViewSequence = SEQUENCE_DAGGERS_IDLE1;
+				if (fNextPlayerAttackTime > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flNextAttack")) {
+					SetEntPropFloat(iClient, Prop_Send, "m_flNextAttack", fNextPlayerAttackTime);
 				}
 				
-				case 514: {  // Bowie
-					iViewSequence = SEQUENCE_BOWIE_IDLE1;
+				if (fNextPrimaryAttack > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flNextPrimaryAttack")) {
+					SetEntPropFloat(iWeapon, Prop_Send, "m_flNextPrimaryAttack", fNextPrimaryAttack);
 				}
 				
-				default: {
-					iViewSequence = SEQUENCE_DEFAULT_IDLE2;
+				if (fNextSecondaryAttack > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flNextSecondaryAttack")) {
+					SetEntPropFloat(iWeapon, Prop_Send, "m_flNextSecondaryAttack", fNextSecondaryAttack);
+				}
+				
+				if (fTimeWeaponIdle > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flTimeWeaponIdle")) {
+					SetEntPropFloat(iWeapon, Prop_Send, "m_flTimeWeaponIdle", fTimeWeaponIdle);
+				}
+				
+				if (fAccuracyPenalty > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_fAccuracyPenalty")) {
+					SetEntPropFloat(iWeapon, Prop_Send, "m_fAccuracyPenalty", fAccuracyPenalty);
+				}
+				
+				if (fDoneSwitchingSilencer > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flDoneSwitchingSilencer")) {
+					SetEntPropFloat(iWeapon, Prop_Send, "m_flDoneSwitchingSilencer", fDoneSwitchingSilencer);
+				}
+				
+				if (fLastShotTime > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_fLastShotTime")) {
+					SetEntPropFloat(iWeapon, Prop_Send, "m_fLastShotTime", fLastShotTime);
+				}
+				
+				if (iReloadVisuallyComplete > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_bReloadVisuallyComplete")) {
+					SetEntProp(iWeapon, Prop_Send, "m_bReloadVisuallyComplete", iReloadVisuallyComplete);
+				}
+				
+				if (iWeaponSilencer > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_bSilencerOn")) {
+					SetEntProp(iWeapon, Prop_Send, "m_bSilencerOn", iWeaponSilencer);
+				}
+				
+				if (iWeaponMode > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_weaponMode")) {
+					SetEntProp(iWeapon, Prop_Send, "m_weaponMode", iWeaponMode);
+				}
+				
+				if (iRecoilIndex > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_iRecoilIndex")) {
+					SetEntProp(iWeapon, Prop_Send, "m_iRecoilIndex", iRecoilIndex);
+				}
+				
+				if (iIronSightMode > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_iIronSightMode")) {
+					SetEntProp(iWeapon, Prop_Send, "m_iIronSightMode", iIronSightMode);
+				}
+				
+				if (iZoomLevel > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel")) {
+					SetEntProp(iWeapon, Prop_Send, "m_zoomLevel", iZoomLevel);
 				}
 			}
-		} else if (StrEqual(szClassName, "weapon_m4a1_silencer", false)) {
-			iViewSequence = 1;
-		} else {
-			iViewSequence = 0;
+			
+			if (bKnife) {
+				switch (iWeaponDefIndex) {
+					case 515 :  {  // Butterfly
+						iViewSequence = SEQUENCE_BUTTERFLY_IDLE1;
+					}
+					
+					case 512 :  {  // Falchion
+						iViewSequence = SEQUENCE_FALCHION_IDLE1;
+					}
+					
+					case 516: {  // Butt Plugs
+						iViewSequence = SEQUENCE_DAGGERS_IDLE1;
+					}
+					
+					case 514: {  // Bowie
+						iViewSequence = SEQUENCE_BOWIE_IDLE1;
+					}
+					
+					default: {
+						iViewSequence = SEQUENCE_DEFAULT_IDLE2;
+					}
+				}
+			} else if (StrEqual(szClassName, "weapon_m4a1_silencer", false)) {
+				iViewSequence = 1;
+			} else {
+				iViewSequence = 0;
+			}
 		}
 	}
 	
-	if (iActiveWeapon == iWeapon) {
-		int iPVM = GetEntPropEnt(iClient, Prop_Send, "m_hViewModel");
-		
-		if(IsValidEntity(iPVM)) {
-			SetEntProp(iPVM, Prop_Send, "m_nSequence", iViewSequence);
-		}
+	if (!IsValidEntity(iViewModel)) {
+		iViewModel = GetEntPropEnt(iClient, Prop_Send, "m_hViewModel");
+	}
+	
+	if (IsValidEntity(iViewModel) && iViewSequence != -1) {
+		SetEntProp(iViewModel, Prop_Send, "m_nSequence", iViewSequence);
 	}
 	
 	SetEntProp(iClient, Prop_Send, "m_iHideHUD", iHudFlags);
+	
+	if (iWeaponTeam > 1 && GetClientTeam(iClient) != iClientTeam) {
+		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iClientTeam);
+	}
 	
 	g_bGivingWeapon[iClient] = false;
 	
@@ -2826,11 +2881,58 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 	Call_PushCell(bKnife);
 	Call_Finish();
 	
-	if (iWeaponTeam > 1 && GetClientTeam(iClient) != iClientTeam) {
-		SetEntProp(iClient, Prop_Send, "m_iTeamNum", iClientTeam);
+	return iWeapon;
+}
+
+public int Native_RespawnWeapon(Handle hPlugin, int iNumParams)
+{
+	int iClient = GetNativeCell(1);
+	int iWeapon = GetNativeCell(2);
+	
+	if (!CSGOItems_IsValidWeapon(iWeapon)) {
+		return -1;
 	}
 	
-	return iWeapon;
+	int iDefIndex = CSGOItems_GetWeaponDefIndexByWeapon(iWeapon);
+	
+	if (iDefIndex <= -1) {
+		return -1;
+	}
+	
+	int iWeaponSlot = CSGOItems_GetWeaponSlotByDefIndex(iDefIndex);
+	
+	if (iWeaponSlot <= -1) {
+		return -1;
+	}
+	
+	if (iWeapon != GetPlayerWeaponSlot(iClient, iWeaponSlot)) {
+		return -1;
+	}
+	
+	char szClassName[48];
+	
+	if (!CSGOItems_GetWeaponClassNameByDefIndex(iDefIndex, szClassName, 48)) {
+		return -1;
+	}
+	
+	int iReserveAmmo = -1;
+	int iClipAmmo = -1;
+	
+	if (HasEntProp(iWeapon, Prop_Send, "m_iPrimaryReserveAmmoCount")) {
+		iReserveAmmo = GetEntProp(iWeapon, Prop_Send, "m_iPrimaryReserveAmmoCount");
+	}
+	
+	if (HasEntProp(iWeapon, Prop_Send, "m_iClip1")) {
+		iClipAmmo = GetEntProp(iWeapon, Prop_Send, "m_iClip1");
+	}
+	
+	return CSGOItems_GiveWeapon(iClient, szClassName, iReserveAmmo, iClipAmmo, CSGOItems_GetActiveWeaponSlot(iClient));
+}
+
+public int Native_RespawnWeaponBySlot(Handle hPlugin, int iNumParams)
+{
+	int iClient = GetNativeCell(1);
+	return CSGOItems_RespawnWeapon(iClient, GetPlayerWeaponSlot(iClient, GetNativeCell(2)));
 }
 
 public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
@@ -2880,6 +2982,12 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 			return false;
 		}
 	}
+	
+	if (iWeapon == CSGOItems_GetActiveWeapon(iClient)) {
+		SetEntPropEnt(iClient, Prop_Send, "m_hActiveWeapon", -1);
+	}
+	
+	RemovePlayerItem(iClient, iWeapon);
 	
 	if (!AcceptEntityInput(iWeapon, "Kill")) {
 		return false;
@@ -2931,7 +3039,7 @@ public int Native_DropWeapon(Handle hPlugin, int iNumParams)
 		SetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity", iClient);
 	}
 	
-	if(iWeapon == CSGOItems_GetActiveWeapon(iClient)) {
+	if (iWeapon == CSGOItems_GetActiveWeapon(iClient)) {
 		SetEntPropEnt(iClient, Prop_Send, "m_hActiveWeapon", -1);
 	}
 	

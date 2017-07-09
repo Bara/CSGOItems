@@ -150,6 +150,8 @@ native bool CSGOItems_RefillClipAmmo(int iWeapon);
 native bool CSGOItems_RefillReserveAmmo(int iWeapon);
 native bool CSGOItems_IsValidWeapon(int iWeapon);
 native int CSGOItems_GiveWeapon(int iClient, const char[] chClassName, int iReserveAmmo = -1, int iClipAmmo = -1, int iSwitchTo = -1);
+native int CSGOItems_RespawnWeapon(int iClient, int iWeapon);
+native int CSGOItems_RespawnWeaponBySlot(int iClient, iWeaponSlot);
 native bool CSGOItems_RemoveKnife(int iClient);
 native bool CSGOItems_RemoveWeapon(int iClient, int iWeapon);
 native int CSGOItems_RemoveAllWeapons(int iClient, int iSkipSlot = -1);
