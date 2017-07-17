@@ -173,6 +173,7 @@ native bool CSGOItems_GetSkinDisplayNameByDefIndex(int iDefIndex, char[] chBuffe
 native bool CSGOItems_GetSkinDisplayNameBySkinNum(int iSkinNum, char[] chBuffer, int iLengh);
 native bool CSGOItems_GetSkinVmtPathBySkinNum(int iSkinNum, char[] chBuffer, int iLength);
 native bool CSGOItems_IsNativeSkin(int iSkinNum, int iItemNum);
+native int CSGOItems_GetWeaponNumBySkinNum(int iSkinNum);
 
 // Gloves
 native int CSGOItems_GetGlovesNumByDefIndex(int iDefIndex);
@@ -185,6 +186,7 @@ native bool CSGOItems_GetGlovesViewModelByGlovesNum(int iGlovesNum, char[] chBuf
 native bool CSGOItems_GetGlovesViewModelByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
 native bool CSGOItems_GetGlovesWorldModelByGlovesNum(int iGlovesNum, char[] chBuffer, int iLengh);
 native bool CSGOItems_GetGlovesWorldModelByDefIndex(int iDefIndex, char[] chBuffer, int iLengh);
+native int CSGOItems_GetGlovesNumBySkinNum(int iSkinNum);
 
 // Sprays
 native int CSGOItems_GetSprayNumByDefIndex(int iDefIndex);

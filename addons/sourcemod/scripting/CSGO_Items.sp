@@ -269,16 +269,16 @@ ConVar g_hCvarSpraysEnabled = null;
 /****************************************************************************************************
 BOOLS.
 *****************************************************************************************************/
-bool g_bIsDefIndexKnife[700];
-bool g_bIsDefIndexSkinnable[700];
-bool g_bSkinNumGloveApplicable[700];
+bool g_bIsDefIndexKnife[1000];
+bool g_bIsDefIndexSkinnable[1000];
+bool g_bSkinNumGloveApplicable[1000];
 bool g_bItemsSynced;
 bool g_bItemsSyncing;
 bool g_bLanguageDownloading;
 bool g_bSchemaDownloading;
 bool g_bGivingWeapon[MAXPLAYERS + 1];
-bool g_bIsNativeSkin[650][100];
-bool g_bIsSkinInSet[100][650];
+bool g_bIsNativeSkin[1000][100];
+bool g_bIsSkinInSet[100][1000];
 bool g_bSteamWorksLoaded = false;
 bool g_bRoundEnd = false;
 bool g_bSpraysEnabled = false;
@@ -290,10 +290,10 @@ bool g_bFollowGuidelines = false;
 STRINGS.
 *****************************************************************************************************/
 char g_szWeaponInfo[100][22][48];
-char g_szPaintInfo[650][22][96];
+char g_szPaintInfo[1000][22][96];
 char g_szMusicKitInfo[100][3][48];
 char g_szGlovesInfo[100][22][96];
-char g_szSprayInfo[650][22][128];
+char g_szSprayInfo[1000][22][128];
 char g_szItemSetInfo[100][3][48];
 char g_szLangPhrases[2198296];
 char g_szSchemaPhrases[2198296];
@@ -529,6 +529,8 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] szError, int iEr
 	CreateNative("CSGOItems_GetRandomSkin", Native_GetRandomSkin);
 	CreateNative("CSGOItems_GetSkinVmtPathBySkinNum", Native_GetSkinVmtPathBySkinNum);
 	CreateNative("CSGOItems_IsNativeSkin", Native_IsNativeSkin);
+	CreateNative("CSGOItems_GetWeaponNumBySkinNum", Native_GetWeaponNumBySkinNum);
+	
 	
 	/****************************************************************************************************
 											--MUSIC KIT NATIVES--
@@ -576,6 +578,7 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] szError, int iEr
 	
 	CreateNative("CSGOItems_GetGlovesWorldModelByGlovesNum", Native_GetGlovesWorldModelByGlovesNum);
 	CreateNative("CSGOItems_GetGlovesWorldModelByDefIndex", Native_GetGlovesWorldModelByDefIndex);
+	CreateNative("CSGOItems_GetGlovesNumBySkinNum", Native_GetGlovesNumBySkinNum);
 	
 	/****************************************************************************************************
 											--SPRAY NATIVES--
@@ -2237,11 +2240,12 @@ stock int GetWeaponDefIndexByClassName(const char[] szClassName)
 	return -1;
 }
 
-public int Native_GetSkinDefIndexBySkinNum(Handle hPlugin, int iNumParams) {
+public int Native_GetSkinDefIndexBySkinNum(Handle hPlugin, int iNumParams) 
+{
 	int iSkinNum = GetNativeCell(1);
 	
 	if (iSkinNum < 0 || iSkinNum > g_iPaintCount) {
-		return 0;
+		return -1;
 	}
 	
 	return StringToInt(g_szPaintInfo[iSkinNum][DEFINDEX]);
@@ -2485,12 +2489,26 @@ public int Native_GetWeaponDisplayNameByWeaponNum(Handle hPlugin, int iNumParams
 	return SetNativeString(2, g_szWeaponInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
-public int Native_GetSkinDisplayNameBySkinNum(Handle hPlugin, int iNumParams) {
-	return SetNativeString(2, g_szPaintInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
+public int Native_GetSkinDisplayNameBySkinNum(Handle hPlugin, int iNumParams) 
+{
+	int iSkinNum = GetNativeCell(1);
+	
+	if (iSkinNum < 0 || iSkinNum > g_iPaintCount) {
+		return false;
+	}
+	
+	return SetNativeString(2, g_szPaintInfo[iSkinNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
-public int Native_GetSkinVmtPathBySkinNum(Handle hPlugin, int iNumParams) {
-	return SetNativeString(2, g_szPaintInfo[GetNativeCell(1)][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
+public int Native_GetSkinVmtPathBySkinNum(Handle hPlugin, int iNumParams) 
+{
+	int iSkinNum = GetNativeCell(1);
+	
+	if (iSkinNum < 0 || iSkinNum > g_iPaintCount) {
+		return false;
+	}
+	
+	return SetNativeString(2, g_szPaintInfo[iSkinNum][VMTPATH], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
 public int Native_IsNativeSkin(Handle hPlugin, int iNumParams)
@@ -2499,6 +2517,40 @@ public int Native_IsNativeSkin(Handle hPlugin, int iNumParams)
 	int iItemNum = GetNativeCell(2);
 	
 	return g_bIsNativeSkin[iSkinNum][iItemNum];
+}
+
+public int Native_GetWeaponNumBySkinNum(Handle hPlugin, int iNumParams)
+{
+	int iSkinNum = GetNativeCell(1);
+	
+	if (iSkinNum < 0 || iSkinNum > g_iPaintCount) {
+		return -1;
+	}
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if(g_bIsNativeSkin[iSkinNum][iWeaponNum]) {
+			return iWeaponNum;
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetGlovesNumBySkinNum(Handle hPlugin, int iNumParams)
+{
+	int iSkinNum = GetNativeCell(1);
+	
+	if (iSkinNum < 0 || iSkinNum > g_iPaintCount) {
+		return -1;
+	}
+	
+	CSGOItems_LoopGloves(iGlovesNum) {
+		if(g_bIsNativeSkin[iSkinNum][iGlovesNum]) {
+			return iGlovesNum;
+		}
+	}
+	
+	return -1;
 }
 
 public int Native_GetGlovesDisplayNameByGlovesNum(Handle hPlugin, int iNumParams) {
@@ -3549,7 +3601,7 @@ public int Native_GetActiveWeaponCount(Handle hPlugin, int iNumParams)
 	int iWeaponSlot = GetWeaponSlotByClassName(szBuffer);
 	
 	if (iWeaponSlot < 0) {
-		return 0;
+		return -1;
 	}
 	
 	CSGOItems_LoopValidClients(iClient) {
