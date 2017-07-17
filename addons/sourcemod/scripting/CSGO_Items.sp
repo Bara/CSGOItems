@@ -204,6 +204,7 @@ INCLUDES
 #include <csgoitems> 
 #include <SteamWorks> 
 #include <autoexecconfig> 
+#include <regex> 
 
 #undef REQUIRE_EXTENSIONS
 #tryinclude <ptah>
@@ -1122,28 +1123,6 @@ public void SyncItemData()
 							g_bIsSkinInSet[g_iItemSetCount][iSkinNum] = true;
 						}
 					}
-					
-					CSGOItems_LoopWeapons(iWeaponNum) {
-						if (GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
-							if (StrContains(szBuffer, szBuffer2, false) != -1) {
-								
-								CSGOItems_LoopSkins(iSkinNum) {
-									if (StrContains(szBuffer, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
-										g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
-									}
-								}
-							} else if (ReplaceString(szBuffer2, 48, "weapon_", "", false) > 0) {
-								if (StrContains(szBuffer, szBuffer2, false) != -1) {
-									
-									CSGOItems_LoopSkins(iSkinNum) {
-										if (StrContains(szBuffer, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
-											g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
-										}
-									}
-								}
-							}
-						}
-					}
 				}
 				while (KvGotoNextKey(g_hItemsKv, false));
 				KvGoBack(g_hItemsKv);
@@ -1196,23 +1175,21 @@ public void SyncItemData()
 		SetFailState("Unable to find Weapon icons keyvalues");
 	}
 	
+	char szIconPath[128];
+	
 	do {
-		KvGetString(g_hItemsKv, "icon_path", szBuffer, 128);
+		KvGetString(g_hItemsKv, "icon_path", szIconPath, 128); 
+		
+		if(!GetClassNameFromIconPath(szIconPath, szBuffer)) {
+			continue;
+		}
 		
 		CSGOItems_LoopWeapons(iWeaponNum) {
 			if (GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
-				if (StrContains(szBuffer, szBuffer2, false) != -1) {
+				if (StrEqual(szBuffer, szBuffer2, false)) {
 					CSGOItems_LoopSkins(iSkinNum) {
-						if (StrContains(szBuffer, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
+						if (StrContains(szIconPath, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
 							g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
-						}
-					}
-				} else if (ReplaceString(szBuffer2, 48, "weapon_", "", false) > 0) {
-					if (StrContains(szBuffer, szBuffer2, false) != -1) {
-						CSGOItems_LoopSkins(iSkinNum) {
-							if (StrContains(szBuffer, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
-								g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
-							}
 						}
 					}
 				}
@@ -1233,16 +1210,6 @@ public void SyncItemData()
 	} while (KvGotoNextKey(g_hItemsKv)); CloseHandle(g_hItemsKv);
 	
 	CSGOItems_LoopSkins(iSkinNum) {
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer, 48)) {
-				if (ReplaceString(szBuffer, 48, "weapon_", "", false) > 0) {
-					if (StrContains(g_szPaintInfo[iSkinNum][ITEMNAME], szBuffer, false) != -1) {
-						g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
-					}
-				}
-			}
-		}
-		
 		CSGOItems_LoopGloves(iGlovesNum) {
 			strcopy(szBuffer, 64, g_szGlovesInfo[iGlovesNum][CLASSNAME]);
 			
@@ -1563,12 +1530,72 @@ stock bool GetWeaponCycleTime(char[] szClassName, char[] szReturn, int iLength)
 
 stock bool IsValidWeaponClassName(const char[] szClassName)
 {
-	return StrContains(szClassName, "weapon_") != -1 && StrContains(szClassName, "base") < 0 && StrContains(szClassName, "case") < 0;
+	if(!g_bItemsSynced || g_bItemsSyncing) {
+		return StrContains(szClassName, "weapon_") != -1 && StrContains(szClassName, "base") < 0 && StrContains(szClassName, "case") < 0;
+	}
+	
+	char szBuffer[48];
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if(!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer, 48)) {
+			continue;
+		}
+		
+		if(!StrEqual(szClassName, szBuffer, false)) {
+			continue;
+		}
+		
+		return true;
+	}
+	
+	return false;
 }
 
 stock bool IsSpecialPrefab(char[] szPrefabName)
 {
 	return StrContains(szPrefabName, "_prefab") < 0;
+}
+
+stock bool GetClassNameFromIconPath(char[] szIconPath, char[] szReturn)
+{
+	/* OLD CODE, Thanks ESK0!
+	
+	if(ReplaceString(szIconPath, 128, "econ/default_generated/", "", false) < 1) {
+		return false;
+	}
+	
+	char szBuffer[48]; int iCount = 0; 
+	
+	for (int x = 0; x < 4; x++) {
+		iCount = StrContains(szIconPath[x], "_", false);
+		char[][] szBufferExploded = new char[iCount][512];
+		
+		ExplodeString(szIconPath[x], "_", szBufferExploded, iCount, 512);
+		Format(szBuffer, 48, "%s_%s", szBufferExploded[0], szBufferExploded[1]);
+		
+		if (!IsValidWeaponClassName(szBuffer)) {
+			continue;
+		}
+		
+		return Format(szReturn, 48, "%s_%s", szBuffer, szBufferExploded[2]) > 0;
+	}
+	
+	return false;
+	*/
+	
+	Regex rRegex = CompileRegex("weapon(?:(?!_[^\\W_]{2}_)_[^\\W_]+)*");
+	
+	if (rRegex.Match(szIconPath) < 1) {
+		delete rRegex;
+		return false;
+	}
+	
+	if(!rRegex.GetSubString(0, szReturn, 48)) {
+		delete rRegex;
+		return false;
+	}
+	
+	return true;
 }
 
 stock bool IsValidClient(int iClient)
@@ -2240,7 +2267,7 @@ stock int GetWeaponDefIndexByClassName(const char[] szClassName)
 	return -1;
 }
 
-public int Native_GetSkinDefIndexBySkinNum(Handle hPlugin, int iNumParams) 
+public int Native_GetSkinDefIndexBySkinNum(Handle hPlugin, int iNumParams)
 {
 	int iSkinNum = GetNativeCell(1);
 	
@@ -2489,7 +2516,7 @@ public int Native_GetWeaponDisplayNameByWeaponNum(Handle hPlugin, int iNumParams
 	return SetNativeString(2, g_szWeaponInfo[GetNativeCell(1)][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
-public int Native_GetSkinDisplayNameBySkinNum(Handle hPlugin, int iNumParams) 
+public int Native_GetSkinDisplayNameBySkinNum(Handle hPlugin, int iNumParams)
 {
 	int iSkinNum = GetNativeCell(1);
 	
@@ -2500,7 +2527,7 @@ public int Native_GetSkinDisplayNameBySkinNum(Handle hPlugin, int iNumParams)
 	return SetNativeString(2, g_szPaintInfo[iSkinNum][DISPLAYNAME], GetNativeCell(3)) == SP_ERROR_NONE;
 }
 
-public int Native_GetSkinVmtPathBySkinNum(Handle hPlugin, int iNumParams) 
+public int Native_GetSkinVmtPathBySkinNum(Handle hPlugin, int iNumParams)
 {
 	int iSkinNum = GetNativeCell(1);
 	
@@ -2528,7 +2555,7 @@ public int Native_GetWeaponNumBySkinNum(Handle hPlugin, int iNumParams)
 	}
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
-		if(g_bIsNativeSkin[iSkinNum][iWeaponNum]) {
+		if (g_bIsNativeSkin[iSkinNum][iWeaponNum]) {
 			return iWeaponNum;
 		}
 	}
@@ -2545,7 +2572,7 @@ public int Native_GetGlovesNumBySkinNum(Handle hPlugin, int iNumParams)
 	}
 	
 	CSGOItems_LoopGloves(iGlovesNum) {
-		if(g_bIsNativeSkin[iSkinNum][iGlovesNum]) {
+		if (g_bIsNativeSkin[iSkinNum][iGlovesNum]) {
 			return iGlovesNum;
 		}
 	}
@@ -2649,11 +2676,11 @@ public int Native_GetActiveWeapon(Handle hPlugin, int iNumParams)
 
 stock int GetActiveWeapon(int iClient)
 {
-	if(!IsValidClient(iClient)) {
+	if (!IsValidClient(iClient)) {
 		return -1;
 	}
 	
-	if(!IsPlayerAlive(iClient)) {
+	if (!IsPlayerAlive(iClient)) {
 		return -1;
 	}
 	
@@ -2668,7 +2695,7 @@ public int Native_GetWeaponDefIndexByWeapon(Handle hPlugin, int iNumParams)
 
 stock int GetWeaponDefIndexByWeapon(int iWeapon)
 {
-	if(!IsValidWeapon(iWeapon)) {
+	if (!IsValidWeapon(iWeapon)) {
 		return -1;
 	}
 	
@@ -2710,11 +2737,11 @@ public int Native_FindWeaponByClassName(Handle hPlugin, int iNumParams)
 
 stock int FindWeaponByClassName(int iClient, const char[] szClassName)
 {
-	if(!IsValidClient(iClient)) {
+	if (!IsValidClient(iClient)) {
 		return -1;
 	}
 	
-	if(!IsPlayerAlive(iClient)) {
+	if (!IsPlayerAlive(iClient)) {
 		return -1;
 	}
 	
@@ -2860,11 +2887,11 @@ public int Native_GiveWeapon(Handle hPlugin, int iNumParams)
 
 stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int iClipAmmo, int iSwitchTo)
 {
-	if(!IsValidClient(iClient)) {
+	if (!IsValidClient(iClient)) {
 		return -1;
 	}
 	
-	if(!IsPlayerAlive(iClient)) {
+	if (!IsPlayerAlive(iClient)) {
 		return -1;
 	}
 	
@@ -3193,15 +3220,15 @@ public int Native_RespawnWeapon(Handle hPlugin, int iNumParams)
 
 stock int RespawnWeapon(int iClient, int iWeapon)
 {
-	if(!IsValidClient(iClient)) {
+	if (!IsValidClient(iClient)) {
 		return -1;
 	}
 	
-	if(!IsPlayerAlive(iClient)) {
+	if (!IsPlayerAlive(iClient)) {
 		return -1;
 	}
 	
-	if(!IsValidWeapon(iWeapon)) {
+	if (!IsValidWeapon(iWeapon)) {
 		return -1;
 	}
 	
@@ -3257,15 +3284,15 @@ public int Native_RemoveWeapon(Handle hPlugin, int iNumParams)
 
 stock bool RemoveWeapon(int iClient, int iWeapon)
 {
-	if(!IsValidClient(iClient)) {
+	if (!IsValidClient(iClient)) {
 		return false;
 	}
 	
-	if(!IsPlayerAlive(iClient)) {
+	if (!IsPlayerAlive(iClient)) {
 		return false;
 	}
 	
-	if(!IsValidWeapon(iWeapon)) {
+	if (!IsValidWeapon(iWeapon)) {
 		return false;
 	}
 	
@@ -3340,15 +3367,15 @@ public int Native_DropWeapon(Handle hPlugin, int iNumParams)
 
 stock bool DropWeapon(int iClient, int iWeapon)
 {
-	if(!IsValidClient(iClient)) {
+	if (!IsValidClient(iClient)) {
 		return false;
 	}
 	
-	if(!IsPlayerAlive(iClient)) {
+	if (!IsPlayerAlive(iClient)) {
 		return false;
 	}
 	
-	if(!IsValidWeapon(iWeapon)) {
+	if (!IsValidWeapon(iWeapon)) {
 		return false;
 	}
 	
@@ -3418,11 +3445,11 @@ public int Native_RemoveAllWeapons(Handle hPlugin, int iNumParams)
 	
 	int iClient = GetNativeCell(1);
 	
-	if(!IsValidClient(iClient)) {
+	if (!IsValidClient(iClient)) {
 		return -1;
 	}
 	
-	if(!IsPlayerAlive(iClient)) {
+	if (!IsPlayerAlive(iClient)) {
 		return -1;
 	}
 	
@@ -3475,15 +3502,15 @@ public int Native_SetActiveWeapon(Handle hPlugin, int iNumParams)
 
 stock bool SetActiveWeapon(int iClient, int iWeapon)
 {
-	if(!IsValidClient(iClient)) {
+	if (!IsValidClient(iClient)) {
 		return false;
 	}
 	
-	if(!IsPlayerAlive(iClient)) {
+	if (!IsPlayerAlive(iClient)) {
 		return false;
 	}
 	
-	if(!IsValidWeapon(iWeapon)) {
+	if (!IsValidWeapon(iWeapon)) {
 		return false;
 	}
 	
@@ -3535,11 +3562,11 @@ public int Native_GetActiveWeaponSlot(Handle hPlugin, int iNumParams)
 
 stock int GetActiveWeaponSlot(int iClient)
 {
-	if(!IsValidClient(iClient)) {
+	if (!IsValidClient(iClient)) {
 		return -1;
 	}
 	
-	if(!IsPlayerAlive(iClient)) {
+	if (!IsPlayerAlive(iClient)) {
 		return -1;
 	}
 	
@@ -3561,11 +3588,11 @@ public int Native_RemoveKnife(Handle hPlugin, int iNumParams)
 
 stock bool RemoveKnife(int iClient)
 {
-	if(!IsValidClient(iClient)) {
+	if (!IsValidClient(iClient)) {
 		return false;
 	}
 	
-	if(!IsPlayerAlive(iClient)) {
+	if (!IsPlayerAlive(iClient)) {
 		return false;
 	}
 	
