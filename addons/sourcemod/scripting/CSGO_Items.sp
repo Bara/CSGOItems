@@ -681,7 +681,7 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 	Handle hLanguageFile = OpenFile("resource/csgo_english_utf8.txt", "r");
 	Handle hLanguageFileNew = OpenFile("resource/csgo_english_utf8_new.txt", "r");
 	
-	if (hLanguageFileNew != null && ReadFileString(hLanguageFileNew, g_szLangPhrases, 2198296) && StrContains(g_szLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
+	if (hLanguageFileNew != null && ReadFileString(hLanguageFileNew, g_szLangPhrases, 2198296) && StrContains(g_szLangPhrases, "// GAMEUI_ENGLISH.txt") > -1) {
 		if (hLanguageFile != null) {
 			CloseHandle(hLanguageFile);
 			hLanguageFile = null;
@@ -693,7 +693,7 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 		RenameFile("resource/csgo_english_utf8.txt", "resource/csgo_english_utf8_new.txt");
 	}
 	
-	else if (hLanguageFile != null && ReadFileString(hLanguageFile, g_szLangPhrases, 2198296) && StrContains(g_szLangPhrases, "// GAMEUI_ENGLISH.txt") != -1) {
+	else if (hLanguageFile != null && ReadFileString(hLanguageFile, g_szLangPhrases, 2198296) && StrContains(g_szLangPhrases, "// GAMEUI_ENGLISH.txt") > -1) {
 		if (hLanguageFileNew != null) {
 			CloseHandle(hLanguageFileNew);
 			hLanguageFileNew = null;
@@ -795,7 +795,7 @@ public Action Timer_SyncSchema(Handle hTimer, Handle hRequest)
 	Handle hSchemaFile = OpenFile("scripts/items/items_game_fixed.txt", "r");
 	Handle hSchemaFileNew = OpenFile("scripts/items/items_game_fixed_new.txt", "r");
 	
-	if (hSchemaFileNew != null && ReadFileString(hSchemaFileNew, g_szSchemaPhrases, 2198296) && StrContains(g_szSchemaPhrases, "\"items_game\"") != -1) {
+	if (hSchemaFileNew != null && ReadFileString(hSchemaFileNew, g_szSchemaPhrases, 2198296) && StrContains(g_szSchemaPhrases, "\"items_game\"") > -1) {
 		if (hSchemaFile != null) {
 			CloseHandle(hSchemaFile);
 			hSchemaFile = null;
@@ -807,7 +807,7 @@ public Action Timer_SyncSchema(Handle hTimer, Handle hRequest)
 		RenameFile("scripts/items/items_game_fixed.txt", "scripts/items/items_game_fixed_new.txt");
 	}
 	
-	else if (hSchemaFile != null && ReadFileString(hSchemaFile, g_szSchemaPhrases, 2198296) && StrContains(g_szSchemaPhrases, "\"items_game\"") != -1) {
+	else if (hSchemaFile != null && ReadFileString(hSchemaFile, g_szSchemaPhrases, 2198296) && StrContains(g_szSchemaPhrases, "\"items_game\"") > -1) {
 		if (hSchemaFileNew != null) {
 			CloseHandle(hSchemaFileNew);
 			hSchemaFileNew = null;
@@ -905,10 +905,10 @@ public void SyncItemData()
 				g_szWeaponInfo[g_iWeaponCount][TEAM] = "2";
 			}
 			
-			if (StrContains(szBuffer, "melee") != -1) {
+			if (StrContains(szBuffer, "melee") > -1) {
 				g_bIsDefIndexKnife[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])] = true;
 				
-				if (StrContains(szBuffer, "unusual") != -1) {
+				if (StrContains(szBuffer, "unusual") > -1) {
 					g_bIsDefIndexSkinnable[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])] = true;
 					g_szWeaponInfo[g_iWeaponCount][SLOT] = "melee";
 				}
@@ -1087,7 +1087,7 @@ public void SyncItemData()
 		KvGetString(g_hItemsKv, "vmt_path", g_szPaintInfo[g_iPaintCount][VMTPATH], 96);
 		PrecacheMaterial(g_szPaintInfo[g_iPaintCount][VMTPATH]);
 		
-		g_bSkinNumGloveApplicable[g_iPaintCount] = StrContains(g_szPaintInfo[g_iPaintCount][VMTPATH], "paints_gloves", false) != -1;
+		g_bSkinNumGloveApplicable[g_iPaintCount] = StrContains(g_szPaintInfo[g_iPaintCount][VMTPATH], "paints_gloves", false) > -1;
 		
 		if (g_bSkinNumGloveApplicable[g_iPaintCount]) {
 			g_iGlovesPaintCount++;
@@ -1206,7 +1206,7 @@ public void SyncItemData()
 				iDefIndex = GetWeaponDefIndexByClassName(szBuffer2);
 				if (IsSkinnableDefIndex(iDefIndex) && StrEqual(szBuffer, szBuffer2, false)) {
 					CSGOItems_LoopSkins(iSkinNum) {
-						if (StrContains(szIconPath, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
+						if (StrContains(szIconPath, g_szPaintInfo[iSkinNum][ITEMNAME], false) > -1) {
 							g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
 						}
 					}
@@ -1242,7 +1242,7 @@ public void SyncItemData()
 				continue;
 			}
 			
-			if (StrContains(g_szPaintInfo[iSkinNum][ITEMNAME], szBuffer, false) != -1) {
+			if (StrContains(g_szPaintInfo[iSkinNum][ITEMNAME], szBuffer, false) > -1) {
 				g_bIsNativeSkin[iSkinNum][iGlovesNum] = true;
 			}
 		}
@@ -1355,7 +1355,7 @@ public void OnConfigsExecuted()
 		}
 		
 		ReplaceString(szBuffer, sizeof(szBuffer), "\"FollowCSGOServerGuidelines\"", ""); TrimString(szBuffer); StripQuotes(szBuffer);
-		g_bFollowGuidelines = StrContains(szBuffer, "yes", false) != -1;
+		g_bFollowGuidelines = StrContains(szBuffer, "yes", false) > -1;
 		break;
 	}
 	
@@ -1426,7 +1426,7 @@ stock void GetWeaponClip(char[] szClassName, char[] szReturn, int iLength)
 	}
 	
 	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-		if (StrContains(szBuffer, "clip_size", false) != -1 && StrContains(szBuffer, "default", false) < 0) {
+		if (StrContains(szBuffer, "clip_size", false) > -1 && StrContains(szBuffer, "default", false) < 0) {
 			ReplaceString(szBuffer, 128, "clip_size", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
 			TrimString(szBuffer); StripQuotes(szBuffer);
 			strcopy(szReturn, iLength, szBuffer);
@@ -1459,7 +1459,7 @@ stock bool GetWeaponKillAward(char[] szClassName, char[] szReturn, int iLength)
 	}
 	
 	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-		if (StrContains(szBuffer, "KillAward", false) != -1 && StrContains(szBuffer, "Weapon", false) < 0) {
+		if (StrContains(szBuffer, "KillAward", false) > -1 && StrContains(szBuffer, "Weapon", false) < 0) {
 			ReplaceString(szBuffer, 128, "KillAward", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
 			TrimString(szBuffer); StripQuotes(szBuffer);
 			strcopy(szReturn, iLength, szBuffer);
@@ -1494,7 +1494,7 @@ stock bool GetWeaponSpread(char[] szClassName, char[] szReturn, int iLength)
 	}
 	
 	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-		if (StrContains(szBuffer, "Spread", false) != -1 && StrContains(szBuffer, "InaccuracyCrouch", false) < 0) {
+		if (StrContains(szBuffer, "Spread", false) > -1 && StrContains(szBuffer, "InaccuracyCrouch", false) < 0) {
 			ReplaceString(szBuffer, 128, "Spread", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
 			TrimString(szBuffer); StripQuotes(szBuffer);
 			strcopy(szReturn, iLength, szBuffer);
@@ -1529,7 +1529,7 @@ stock bool GetWeaponCycleTime(char[] szClassName, char[] szReturn, int iLength)
 	}
 	
 	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-		if (StrContains(szBuffer, "CycleTime", false) != -1 && StrContains(szBuffer, "TimeToIdle", false) < 0) {
+		if (StrContains(szBuffer, "CycleTime", false) > -1 && StrContains(szBuffer, "TimeToIdle", false) < 0) {
 			ReplaceString(szBuffer, 128, "CycleTime", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
 			TrimString(szBuffer); StripQuotes(szBuffer);
 			strcopy(szReturn, iLength, szBuffer);
@@ -1549,7 +1549,7 @@ stock bool GetWeaponCycleTime(char[] szClassName, char[] szReturn, int iLength)
 stock bool IsValidWeaponClassName(const char[] szClassName)
 {
 	if (!g_bItemsSynced || g_bItemsSyncing) {
-		return StrContains(szClassName, "weapon_") != -1 && StrContains(szClassName, "base") < 0 && StrContains(szClassName, "case") < 0;
+		return StrContains(szClassName, "weapon_") > -1 && StrContains(szClassName, "base") < 0 && StrContains(szClassName, "case") < 0;
 	}
 	
 	char szBuffer[48];
@@ -1569,8 +1569,7 @@ stock bool IsValidWeaponClassName(const char[] szClassName)
 	return false;
 }
 
-stock bool IsSpecialPrefab(char[] szPrefabName)
-{
+stock bool IsSpecialPrefab(char[] szPrefabName) {
 	return StrContains(szPrefabName, "_prefab") < 0;
 }
 
@@ -1602,23 +1601,23 @@ stock bool IsValidClient(int iClient)
 
 stock int SlotNameToNum(const char[] szSlotName)
 {
-	if (StrContains(szSlotName, "rifle") != -1 || StrContains(szSlotName, "heavy") != -1 || StrContains(szSlotName, "smg") != -1) {
+	if (StrContains(szSlotName, "rifle") > -1 || StrContains(szSlotName, "heavy") > -1 || StrContains(szSlotName, "smg") > -1) {
 		return CS_SLOT_PRIMARY;
 	}
 	
-	else if (StrContains(szSlotName, "secondary") != -1) {
+	else if (StrContains(szSlotName, "secondary") > -1) {
 		return CS_SLOT_SECONDARY;
 	}
 	
-	else if (StrContains(szSlotName, "c4") != -1) {
+	else if (StrContains(szSlotName, "c4") > -1) {
 		return CS_SLOT_C4;
 	}
 	
-	else if (StrContains(szSlotName, "melee") != -1) {
+	else if (StrContains(szSlotName, "melee") > -1) {
 		return CS_SLOT_KNIFE;
 	}
 	
-	else if (StrContains(szSlotName, "grenade") != -1) {
+	else if (StrContains(szSlotName, "grenade") > -1) {
 		return CS_SLOT_GRENADE;
 	}
 	
@@ -2984,7 +2983,7 @@ stock int FindWeaponByClassName(int iClient, const char[] szClassName)
 		iWeapon = GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i);
 		iCurrentDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 		
-		if (iCurrentDefIndex < 0) {
+		if (iCurrentDefIndex < 0 || iCurrentDefIndex > 700) {
 			continue;
 		}
 		
@@ -3132,7 +3131,7 @@ stock bool IsValidWeapon(int iWeapon)
 		return false;
 	}
 	
-	char szBuffer[48]; GetEdictClassname(iWeapon, szBuffer, 48);
+	char szBuffer[48]; GetEntityClassname(iWeapon, szBuffer, 48);
 	
 	return IsValidWeaponClassName(szBuffer);
 }
@@ -3169,7 +3168,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	int iViewModel = GetEntPropEnt(iClient, Prop_Send, "m_hViewModel");
 	int iViewSequence = -1;
 	
-	if (iViewModel != -1 && IsValidEntity(iViewModel)) {
+	if (iViewModel > -1 && IsValidEntity(iViewModel)) {
 		iViewSequence = GetEntProp(iViewModel, Prop_Send, "m_nSequence");
 	}
 	
@@ -3283,7 +3282,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 		}
 		
 		iWeapon = GivePlayerItem(iClient, szClassName);
-		bGiven = iWeapon != -1;
+		bGiven = iWeapon > -1;
 	}
 	
 	if (!IsValidWeapon(iWeapon) || !bGiven) {
@@ -3293,10 +3292,10 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 		
 		g_bGivingWeapon[iClient] = false;
 		
-		if (iWeapon != -1 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
+		if (iWeapon > -1 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
 			int iWorldModel = GetEntPropEnt(iWeapon, Prop_Send, "m_hWeaponWorldModel");
 			
-			if (iWorldModel != -1 && IsValidEdict(iWorldModel) && IsValidEntity(iWorldModel)) {
+			if (iWorldModel > -1 && IsValidEdict(iWorldModel) && IsValidEntity(iWorldModel)) {
 				AcceptEntityInput(iWorldModel, "Kill");
 			}
 			
@@ -3424,7 +3423,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 		iViewModel = GetEntPropEnt(iClient, Prop_Send, "m_hViewModel");
 	}
 	
-	if (IsValidEntity(iViewModel) && iViewSequence != -1) {
+	if (IsValidEntity(iViewModel) && iViewSequence > -1) {
 		SetEntProp(iViewModel, Prop_Send, "m_nSequence", iViewSequence);
 	}
 	
@@ -3451,7 +3450,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 
 public Action OnNormalSoundPlayed(int iClients[64], int &iNumClients, char szSample[PLATFORM_MAX_PATH], int &iEntity, int &iChannel, float &iVolume, int &iLevel, int &iPitch, int &iFlags)
 {
-	if (StrContains(szSample, "itempickup.wav", false) != -1) {
+	if (StrContains(szSample, "itempickup.wav", false) > -1 || StrContains(szSample, "ClipEmpty_Rifle.wav", false) > -1 || StrContains(szSample, "buttons/", false) > -1) {
 		CSGOItems_LoopValidClients(iClient) {
 			if (g_bGivingWeapon[iClient]) {
 				return Plugin_Handled;
@@ -3477,10 +3476,6 @@ stock int RespawnWeapon(int iClient, int iWeapon)
 	}
 	
 	if (!IsPlayerAlive(iClient)) {
-		return -1;
-	}
-	
-	if (!IsValidWeapon(iWeapon)) {
 		return -1;
 	}
 	
@@ -3544,10 +3539,6 @@ stock bool RemoveWeapon(int iClient, int iWeapon)
 		return false;
 	}
 	
-	if (!IsValidWeapon(iWeapon)) {
-		return false;
-	}
-	
 	if (g_bRoundEnd) {
 		return false;
 	}
@@ -3575,7 +3566,7 @@ stock bool RemoveWeapon(int iClient, int iWeapon)
 	}
 	
 	if (HasEntProp(iWeapon, Prop_Send, "m_bStartedArming")) {
-		if (GetEntSendPropOffs(iWeapon, "m_bStartedArming") != -1) {
+		if (GetEntSendPropOffs(iWeapon, "m_bStartedArming") > -1) {
 			return false;
 		}
 	}
@@ -3627,10 +3618,6 @@ stock bool DropWeapon(int iClient, int iWeapon)
 		return false;
 	}
 	
-	if (!IsValidWeapon(iWeapon)) {
-		return false;
-	}
-	
 	if (g_bRoundEnd) {
 		return false;
 	}
@@ -3658,7 +3645,7 @@ stock bool DropWeapon(int iClient, int iWeapon)
 	}
 	
 	if (HasEntProp(iWeapon, Prop_Send, "m_bStartedArming")) {
-		if (GetEntSendPropOffs(iWeapon, "m_bStartedArming") != -1) {
+		if (GetEntSendPropOffs(iWeapon, "m_bStartedArming") > -1) {
 			return false;
 		}
 	}
@@ -3715,11 +3702,6 @@ public int Native_RemoveAllWeapons(Handle hPlugin, int iNumParams)
 	
 	for (int i = 0; i < iWeaponArraySize; i++) {
 		iWeapon = GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i);
-		
-		if (!IsValidWeapon(iWeapon)) {
-			continue;
-		}
-		
 		iDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 		
 		if (iDefIndex < 0 || iDefIndex > 700) {
@@ -3732,7 +3714,7 @@ public int Native_RemoveAllWeapons(Handle hPlugin, int iNumParams)
 			continue;
 		}
 		
-		if (iWeaponSlot == iSkipSlot && iSkipSlot != -1) {
+		if (iWeaponSlot == iSkipSlot && iSkipSlot > -1) {
 			continue;
 		}
 		
@@ -3759,10 +3741,6 @@ stock bool SetActiveWeapon(int iClient, int iWeapon)
 	}
 	
 	if (!IsPlayerAlive(iClient)) {
-		return false;
-	}
-	
-	if (!IsValidWeapon(iWeapon)) {
 		return false;
 	}
 	
@@ -3854,11 +3832,6 @@ stock bool RemoveKnife(int iClient)
 	
 	for (int i = 0; i < iWeaponArraySize; i++) {
 		iWeapon = GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i);
-		
-		if (!IsValidWeapon(iWeapon)) {
-			continue;
-		}
-		
 		iDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 		
 		if (!IsDefIndexKnife(iDefIndex)) {
