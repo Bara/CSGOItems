@@ -360,6 +360,8 @@ public void OnPluginStart()
 	
 	g_bPTAH = LibraryExists("PTaH");
 	g_bSpawnItemFromDefIndex = g_bPTAH ? GetFeatureStatus(FeatureType_Native, "PTaH_SpawnItemFromDefIndex") == FeatureStatus_Available : false;
+	
+	AddNormalSoundHook(OnNormalSoundPlayed);
 }
 
 public void OnCvarChanged(ConVar hConVar, const char[] szOldValue, const char[] szNewValue)
@@ -2929,13 +2931,13 @@ public int Native_FindWeaponByWeaponNum(Handle hPlugin, int iNumParams)
 
 stock int FindWeaponByDefIndex(int iClient, int iDefIndex)
 {
-	if(iDefIndex < 0 || iDefIndex > 700) {
+	if (iDefIndex < 0 || iDefIndex > 700) {
 		return -1;
 	}
 	
 	char szBuffer[48];
 	
-	if(!GetWeaponClassNameByDefIndex(iDefIndex, szBuffer, 48)) {
+	if (!GetWeaponClassNameByDefIndex(iDefIndex, szBuffer, 48)) {
 		return -1;
 	}
 	
@@ -2944,13 +2946,13 @@ stock int FindWeaponByDefIndex(int iClient, int iDefIndex)
 
 stock int FindWeaponByWeaponNum(int iClient, int iWeaponNum)
 {
-	if(iWeaponNum < 0 || iWeaponNum > g_iWeaponCount) {
+	if (iWeaponNum < 0 || iWeaponNum > g_iWeaponCount) {
 		return -1;
 	}
 	
 	char szBuffer[48];
 	
-	if(!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer, 48)) {
+	if (!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer, 48)) {
 		return -1;
 	}
 	
@@ -2970,7 +2972,7 @@ stock int FindWeaponByClassName(int iClient, const char[] szClassName)
 	char szBuffer[48];
 	int iOriginalDefIndex = GetWeaponDefIndexByClassName(szClassName);
 	
-	if(iOriginalDefIndex < 0) {
+	if (iOriginalDefIndex < 0) {
 		return -1;
 	}
 	
@@ -2982,15 +2984,15 @@ stock int FindWeaponByClassName(int iClient, const char[] szClassName)
 		iWeapon = GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i);
 		iCurrentDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 		
-		if(iCurrentDefIndex < 0) {
+		if (iCurrentDefIndex < 0) {
 			continue;
 		}
 		
-		if(iCurrentDefIndex == iOriginalDefIndex) {
+		if (iCurrentDefIndex == iOriginalDefIndex) {
 			return iWeapon;
 		}
 		
-		if(!GetEntityClassname(iWeapon, szBuffer, 48)) {
+		if (!GetEntityClassname(iWeapon, szBuffer, 48)) {
 			continue;
 		}
 		
@@ -2998,19 +3000,19 @@ stock int FindWeaponByClassName(int iClient, const char[] szClassName)
 			return iWeapon;
 		}
 		
-		if(GetWeaponDefIndexByClassName(szBuffer) == iOriginalDefIndex) {
+		if (GetWeaponDefIndexByClassName(szBuffer) == iOriginalDefIndex) {
 			return iWeapon;
 		}
 		
-		if(!GetWeaponClassNameByWeapon(iWeapon, szBuffer, 48)) {
+		if (!GetWeaponClassNameByWeapon(iWeapon, szBuffer, 48)) {
 			continue;
-		} 
+		}
 		
 		if (StrEqual(szClassName, szBuffer, false)) {
 			return iWeapon;
 		}
 		
-		if(GetWeaponDefIndexByClassName(szBuffer) == iOriginalDefIndex) {
+		if (GetWeaponDefIndexByClassName(szBuffer) == iOriginalDefIndex) {
 			return iWeapon;
 		}
 	}
@@ -3265,47 +3267,22 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	int iWeapon = -1;
 	bool bGiven = false;
 	
-	if (g_bPTAH) {
-		#if defined _PTaH_included
-		if (g_bSpawnItemFromDefIndex && bKnife) {
-			float fVecOrigin[3]; GetClientAbsOrigin(iClient, fVecOrigin);
-			iWeapon = PTaH_SpawnItemFromDefIndex(iWeaponDefIndex, fVecOrigin);
-			
-			if (IsValidEntity(iWeapon)) {
-				bGiven = view_as<bool>(PTaH_GetEconItemViewFromWeapon(iWeapon));
-			} else {
-				bGiven = false;
-			}
-		} else {
-			bGiven = false;
-		}
-		#else
-		bGiven = false;
-		#endif
-	} else if (bKnife) {
-		if (g_bFollowGuidelines) {
-			iWeapon = CreateEntityByName("weapon_knife");
-			
-			if (!IsValidEntity(iWeapon)) {
-				bGiven = false;
-			} else {
-				SetEntProp(iWeapon, Prop_Send, "m_iItemIDLow", -1);
-				SetEntProp(iWeapon, Prop_Send, "m_iAccountID", GetSteamAccountID(iClient));
-				SetEntProp(iWeapon, Prop_Send, "m_iItemDefinitionIndex", iWeaponDefIndex);
-				SetEntProp(iWeapon, Prop_Send, "m_bInitialized", 1);
-				
-				bGiven = DispatchSpawn(iWeapon);
-			}
+	if (g_bPTAH && g_bSpawnItemFromDefIndex && bKnife) {
+		float fVecOrigin[3]; GetClientAbsOrigin(iClient, fVecOrigin);
+		
+		iWeapon = PTaH_SpawnItemFromDefIndex(iWeaponDefIndex, fVecOrigin);
+		
+		if (IsValidEntity(iWeapon)) {
+			bGiven = true;
 		}
 	}
 	
 	if (!bGiven) {
-		if (bKnife && g_bFollowGuidelines) {
+		if(bKnife && g_bFollowGuidelines) {
 			strcopy(szClassName, 48, iClientTeam == CS_TEAM_T ? "weapon_knife_t" : "weapon_knife");
 		}
 		
 		iWeapon = GivePlayerItem(iClient, szClassName);
-		
 		bGiven = iWeapon != -1;
 	}
 	
@@ -3470,6 +3447,19 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	Call_Finish();
 	
 	return iWeapon;
+}
+
+public Action OnNormalSoundPlayed(int iClients[64], int &iNumClients, char szSample[PLATFORM_MAX_PATH], int &iEntity, int &iChannel, float &iVolume, int &iLevel, int &iPitch, int &iFlags)
+{
+	if (StrContains(szSample, "itempickup.wav", false) != -1) {
+		CSGOItems_LoopValidClients(iClient) {
+			if (g_bGivingWeapon[iClient]) {
+				return Plugin_Handled;
+			}
+		}
+	}
+	
+	return Plugin_Continue;
 }
 
 public int Native_RespawnWeapon(Handle hPlugin, int iNumParams)
