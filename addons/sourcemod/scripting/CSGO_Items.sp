@@ -1176,17 +1176,32 @@ public void SyncItemData()
 	}
 	
 	char szIconPath[128];
+	int iDefIndex;
+	bool bKnife;
 	
 	do {
-		KvGetString(g_hItemsKv, "icon_path", szIconPath, 128); 
+		KvGetString(g_hItemsKv, "icon_path", szIconPath, 128);
 		
-		if(!GetClassNameFromIconPath(szIconPath, szBuffer)) {
-			continue;
+		CSGOItems_LoopWeapons(iWeaponNum) {
+			iDefIndex = GetWeaponDefIndexByWeaponNum(iWeaponNum);
+			
+			if (IsDefIndexKnife(iDefIndex)) {
+				if (GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer, 48)) {
+					bKnife = StrContains(szIconPath, szBuffer, false) > -1 && IsSkinnableDefIndex(iDefIndex);
+				}
+			}
+		}
+		
+		if (!bKnife) {
+			if (!GetClassNameFromIconPath(szIconPath, szBuffer)) {
+				continue;
+			}
 		}
 		
 		CSGOItems_LoopWeapons(iWeaponNum) {
 			if (GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
-				if (StrEqual(szBuffer, szBuffer2, false)) {
+				iDefIndex = GetWeaponDefIndexByClassName(szBuffer2);
+				if (IsSkinnableDefIndex(iDefIndex) && (StrEqual(szBuffer, szBuffer2, false) || (IsDefIndexKnife(iDefIndex) && StrContains(szIconPath, szBuffer2, false) > -1))) {
 					CSGOItems_LoopSkins(iSkinNum) {
 						if (StrContains(szIconPath, g_szPaintInfo[iSkinNum][ITEMNAME], false) != -1) {
 							g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
@@ -1530,18 +1545,18 @@ stock bool GetWeaponCycleTime(char[] szClassName, char[] szReturn, int iLength)
 
 stock bool IsValidWeaponClassName(const char[] szClassName)
 {
-	if(!g_bItemsSynced || g_bItemsSyncing) {
+	if (!g_bItemsSynced || g_bItemsSyncing) {
 		return StrContains(szClassName, "weapon_") != -1 && StrContains(szClassName, "base") < 0 && StrContains(szClassName, "case") < 0;
 	}
 	
 	char szBuffer[48];
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
-		if(!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer, 48)) {
+		if (!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer, 48)) {
 			continue;
 		}
 		
-		if(!StrEqual(szClassName, szBuffer, false)) {
+		if (!StrEqual(szClassName, szBuffer, false)) {
 			continue;
 		}
 		
@@ -1590,7 +1605,7 @@ stock bool GetClassNameFromIconPath(char[] szIconPath, char[] szReturn)
 		return false;
 	}
 	
-	if(!rRegex.GetSubString(0, szReturn, 48)) {
+	if (!rRegex.GetSubString(0, szReturn, 48)) {
 		delete rRegex;
 		return false;
 	}
