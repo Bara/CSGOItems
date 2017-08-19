@@ -939,6 +939,7 @@ public void SyncItemData()
 				KvGetString(g_hItemsKv, "item_name", szBuffer, 48);
 				KvGetString(g_hItemsKv, "model_player", g_szWeaponInfo[g_iWeaponCount][VIEWMODEL], 48);
 				KvGetString(g_hItemsKv, "model_world", g_szWeaponInfo[g_iWeaponCount][WORLDMODEL], 48);
+				
 			} else {
 				KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv);
 				
@@ -2899,8 +2900,15 @@ stock bool IsSkinnableDefIndex(int iDefIndex)
 	return g_bIsDefIndexSkinnable[iDefIndex];
 }
 
-public int Native_IsSkinNumGloveApplicable(Handle hPlugin, int iNumParams) {
-	return g_bSkinNumGloveApplicable[GetNativeCell(1)];
+public int Native_IsSkinNumGloveApplicable(Handle hPlugin, int iNumParams) 
+{
+	int iSkinNum = GetNativeCell(1);
+	
+	if (iSkinNum < 0) {
+		return false;
+	}
+	
+	return g_bSkinNumGloveApplicable[iSkinNum];
 }
 
 public int Native_FindWeaponByClassName(Handle hPlugin, int iNumParams)
@@ -3161,7 +3169,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	char szClassName[48]; strcopy(szClassName, 48, szBuffer);
 	int iClientTeam = GetClientTeam(iClient);
 	
-	if (iClientTeam < 2 || iClientTeam > 3 || !IsPlayerAlive(iClient)) {
+	if (iClientTeam < 2 || iClientTeam > 3) {
 		return -1;
 	}
 	
@@ -3268,8 +3276,9 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	
 	if (g_bPTAH && g_bSpawnItemFromDefIndex && bKnife) {
 		float fVecOrigin[3]; GetClientAbsOrigin(iClient, fVecOrigin);
+		float fVecAngles[3]; GetClientAbsAngles(iClient, fVecAngles);
 		
-		iWeapon = PTaH_SpawnItemFromDefIndex(iWeaponDefIndex, fVecOrigin);
+		iWeapon = PTaH_SpawnItemFromDefIndex(iWeaponDefIndex, fVecOrigin, fVecAngles);
 		
 		if (IsValidEntity(iWeapon)) {
 			bGiven = true;
@@ -3575,7 +3584,7 @@ stock bool RemoveWeapon(int iClient, int iWeapon)
 		return false;
 	}
 	
-	if (!DropWeapon(iClient, iWeapon)) {
+	if (!RemovePlayerItem(iClient, iWeapon)) {
 		return false;
 	}
 	
@@ -3591,11 +3600,7 @@ stock bool RemoveWeapon(int iClient, int iWeapon)
 		SetEntPropEnt(iClient, Prop_Send, "m_hActiveWeapon", -1);
 	}
 	
-	RemovePlayerItem(iClient, iWeapon);
-	
-	if (!AcceptEntityInput(iWeapon, "Kill")) {
-		return false;
-	}
+	AcceptEntityInput(iWeapon, "Kill");
 	
 	return true;
 }
