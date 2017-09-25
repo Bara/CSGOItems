@@ -194,6 +194,26 @@ CHANGELOG
 			- Optimized code, Removed natives calling natives.
 			- Improved validation.
 		1.4.3 ~
+			- Added CSGOItems_GetWeaponNumBySkinNum.
+			- Added CSGOItems_GetGlovesNumBySkinNum.
+			- Added CSGOItems_FindWeaponByWeaponNum.
+			- Added CSGOItems_FindWeaponByDefIndex.
+			- Added CSGOItems_GetWeaponNumByWeapon.
+			- Added CSGOItems_GetWeaponDisplayNameByWeapon.
+			- Added CSGOItems_GetWeaponViewModelByWeapon.
+			- Added CSGOItems_GetWeaponWorldModelByWeapon.
+			- Added CSGOItems_GetWeaponTeamByWeapon.
+			- Added CSGOItems_GetWeaponSlotByWeapon.
+			- Added CSGOItems_GetWeaponClipAmmoByWeapon.
+			- Added CSGOItems_GetWeaponReserveAmmoByWeapon.
+			- Added CSGOItems_GetWeaponKillAwardByWeapon.
+			- Added CSGOItems_GetWeaponSpreadByWeapon.
+			- Added CSGOItems_GetWeaponCycleTimeByWeapon.
+			- Fixed weapon to skin sync
+			- Cleaned Knife logic inside CSGOItems_GiveWeapon.
+			- Added SoundHook to block Equip Sound when CSGOItems_GiveWeapon is called.
+			- Several optimizations.
+			- Improved validation in some areas.
 			
 ****************************************************************************************************
 INCLUDES
@@ -213,7 +233,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.4.2"
+#define VERSION "1.4.3"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -299,6 +319,7 @@ char g_szSprayInfo[1000][22][128];
 char g_szItemSetInfo[100][3][48];
 char g_szLangPhrases[2198296];
 char g_szSchemaPhrases[2198296];
+char g_szCDNPhrases[2198296];
 
 /****************************************************************************************************
 INTS.
@@ -868,6 +889,14 @@ public Action Timer_SyncSchema(Handle hTimer, Handle hRequest)
 
 public void SyncItemData()
 {
+	Handle hFile = OpenFile("scripts/items/items_game_cdn.txt", "r");
+	
+	if (hFile != null) {
+		ReadFileString(hFile, g_szCDNPhrases, 2198296);
+	}
+	
+	delete hFile;
+	
 	g_bItemsSyncing = true;
 	g_iPaintCount = 0;
 	g_iWeaponCount = 0;
@@ -1180,41 +1209,30 @@ public void SyncItemData()
 		char szExplode[2][64]; ExplodeString(szBuffer, "/", szExplode, 2, 64);
 		
 		CreateSprayVMT(g_iSprayCount, szExplode[0], szExplode[1], g_szSprayInfo[g_iSprayCount][VTFPATH]);
-		SafePrecacheDecal(g_szSprayInfo[g_iSprayCount][VTFPATH]);
+		SafePrecacheDecal(g_szSprayInfo[g_iSprayCount][VTFPATH], true);
 		
 		g_iSprayCount++;
 		
 	} while (KvGotoNextKey(g_hItemsKv)); KvRewind(g_hItemsKv);
 	
-	if (!KvJumpToKey(g_hItemsKv, "alternate_icons2") || !KvGotoFirstSubKey(g_hItemsKv, false) || !KvGotoFirstSubKey(g_hItemsKv, false)) {
-		Call_StartForward(g_hOnPluginEnd);
-		Call_Finish();
-		SetFailState("Unable to find Weapon icons keyvalues");
-	}
-	
-	char szIconPath[128];
 	int iDefIndex;
 	
-	do {
-		KvGetString(g_hItemsKv, "icon_path", szIconPath, 128);
-		
-		if (!GetClassNameFromIconPath(szIconPath, szBuffer)) {
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
 			continue;
 		}
 		
-		CSGOItems_LoopWeapons(iWeaponNum) {
-			if (GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
-				iDefIndex = GetWeaponDefIndexByClassName(szBuffer2);
-				if (IsSkinnableDefIndex(iDefIndex) && StrEqual(szBuffer, szBuffer2, false)) {
-					CSGOItems_LoopSkins(iSkinNum) {
-						if (StrContains(szIconPath, g_szPaintInfo[iSkinNum][ITEMNAME], false) > -1) {
-							g_bIsNativeSkin[iSkinNum][iWeaponNum] = true;
-						}
-					}
-				}
-			}
+		iDefIndex = GetWeaponDefIndexByClassName(szBuffer2);
+		
+		if (!IsSkinnableDefIndex(iDefIndex)) {
+			continue;
 		}
-	} while (KvGotoNextKey(g_hItemsKv)); KvRewind(g_hItemsKv);
+		
+		CSGOItems_LoopSkins(iSkinNum) {
+			Format(szBuffer, sizeof(szBuffer), "%s_%s", szBuffer2, g_szPaintInfo[iSkinNum][ITEMNAME]);
+			g_bIsNativeSkin[iSkinNum][iWeaponNum] = StrContains(g_szCDNPhrases, szBuffer, false) != -1;
+		}
+	}
 	
 	if (!KvJumpToKey(g_hItemsKv, "paint_kits_rarity")) {
 		Call_StartForward(g_hOnPluginEnd);
@@ -1251,6 +1269,7 @@ public void SyncItemData()
 	
 	Call_StartForward(g_hOnItemsSynced);
 	Call_Finish();
+	OnMapStart();
 	
 	g_bItemsSynced = true;
 	g_bItemsSyncing = false;
@@ -1382,7 +1401,7 @@ public void OnMapStart()
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials/", "", false);
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
 			
-			PrecacheDecal(szBuffer);
+			SafePrecacheDecal(szBuffer, true);
 			PrecacheMaterial(szBuffer);
 		}
 	}
@@ -2593,7 +2612,7 @@ public int Native_GetSprayCacheIndexBySprayNum(Handle hPlugin, int iNumParams)
 	ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
 	
 	PrecacheMaterial(szBuffer);
-	return SafePrecacheDecal(szBuffer);
+	return SafePrecacheDecal(szBuffer, true);
 }
 
 public int Native_GetSprayVTFBySprayNum(Handle hPlugin, int iNumParams) {
@@ -2612,7 +2631,7 @@ public int Native_GetSprayCacheIndexByDefIndex(Handle hPlugin, int iNumParams)
 			ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
 			
 			PrecacheMaterial(szBuffer);
-			return SafePrecacheDecal(szBuffer);
+			return SafePrecacheDecal(szBuffer, true);
 		}
 	}
 	
@@ -2900,7 +2919,7 @@ stock bool IsSkinnableDefIndex(int iDefIndex)
 	return g_bIsDefIndexSkinnable[iDefIndex];
 }
 
-public int Native_IsSkinNumGloveApplicable(Handle hPlugin, int iNumParams) 
+public int Native_IsSkinNumGloveApplicable(Handle hPlugin, int iNumParams)
 {
 	int iSkinNum = GetNativeCell(1);
 	
@@ -3286,7 +3305,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	}
 	
 	if (!bGiven) {
-		if(bKnife && g_bFollowGuidelines) {
+		if (bKnife && g_bFollowGuidelines) {
 			strcopy(szClassName, 48, iClientTeam == CS_TEAM_T ? "weapon_knife_t" : "weapon_knife");
 		}
 		
