@@ -214,6 +214,14 @@ CHANGELOG
 			- Added SoundHook to block Equip Sound when CSGOItems_GiveWeapon is called.
 			- Several optimizations.
 			- Improved validation in some areas.
+		1.4.4 ~
+			- Fixed Regex mem leak (Thanks Bara)
+			- Removed unnecessary precache logic.
+			- Fixed error with skin num going out of bounds.
+			- Sync will wait when its the end of round to prevent crashes.
+			- Remove a couple of useless things.
+			- Next version will rework iteration logic.
+			
 			
 ****************************************************************************************************
 INCLUDES
@@ -233,7 +241,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.4.3"
+#define VERSION "1.4.4"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -394,6 +402,41 @@ public void OnCvarChanged(ConVar hConVar, const char[] szOldValue, const char[] 
 
 public int SteamWorks_SteamServersConnected() {
 	RetrieveLanguage();
+}
+
+public Action SteamWorks_RestartRequested()
+{
+	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, LANGURL);
+	
+	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Pragma", "no-cache");
+	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Cache-Control", "no-cache");
+	SteamWorks_SetHTTPRequestGetOrPostParameter(hRequest, "update", "true");
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 60);
+	SteamWorks_SetHTTPCallbacks(hRequest, CallBack_LangUpdated);
+	
+	if (hRequest != null) {
+		SteamWorks_SendHTTPRequest(hRequest);
+	}
+	
+	hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, SCHEMAURL);
+	
+	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Pragma", "no-cache");
+	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Cache-Control", "no-cache");
+	SteamWorks_SetHTTPRequestGetOrPostParameter(hRequest, "update", "true");
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 60);
+	SteamWorks_SetHTTPCallbacks(hRequest, CallBack_SchemaUpdated);
+	
+	if (hRequest != null) {
+		SteamWorks_SendHTTPRequest(hRequest);
+	}
+}
+
+public int CallBack_LangUpdated(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything) {
+	delete hRequest;
+}
+
+public int CallBack_SchemaUpdated(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything) {
+	delete hRequest;
 }
 
 public void OnAllPluginsLoaded() {
@@ -643,6 +686,7 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] szError, int iEr
 	CreateNative("CSGOItems_GetSprayCacheIndexDefIndex", Native_GetSprayCacheIndexByDefIndex);
 	
 	RegPluginLibrary("CSGO_Items");
+	MarkNativeAsOptional("PTaH_SpawnItemFromDefIndex");
 	
 	return APLRes_Success;
 }
@@ -658,6 +702,11 @@ public bool RetrieveLanguage()
 	
 	if (g_bLanguageDownloading || g_bSchemaDownloading || g_bItemsSyncing || !SteamWorks_IsConnected()) {
 		return false;
+	}
+	
+	if(g_bRoundEnd) {
+		CreateTimer(0.0, Timer_Wait1, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+		return true;
 	}
 	
 	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, LANGURL);
@@ -682,6 +731,25 @@ public bool RetrieveLanguage()
 	return false;
 }
 
+public Action Timer_Wait1(Handle hTimer)
+{
+	if (!g_bSteamWorksLoaded) {
+		return Plugin_Stop;
+	}
+	
+	if (g_bLanguageDownloading || g_bSchemaDownloading || g_bItemsSyncing || !SteamWorks_IsConnected()) {
+		return Plugin_Stop;
+	}
+	
+	if(g_bRoundEnd) {
+		return Plugin_Continue;
+	}
+	
+	RetrieveLanguage();
+	
+	return Plugin_Stop;
+}
+
 public int Language_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything)
 {
 	if (bRequestSuccessful && eStatusCode == k_EHTTPStatusCode200OK) {
@@ -694,11 +762,15 @@ public int Language_Retrieved(Handle hRequest, bool bFailure, bool bRequestSucce
 	
 	LogMessage("UTF-8 language file successfully retrieved.");
 	
-	CreateTimer(1.0, Timer_SyncLanguage, hRequest);
+	CreateTimer(1.0, Timer_SyncLanguage, hRequest, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 }
 
 public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 {
+	if(g_bRoundEnd) {
+		return Plugin_Continue;
+	}
+	
 	Handle hLanguageFile = OpenFile("resource/csgo_english_utf8.txt", "r");
 	Handle hLanguageFileNew = OpenFile("resource/csgo_english_utf8_new.txt", "r");
 	
@@ -774,8 +846,17 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 
 public bool RetrieveItemSchema()
 {
-	if (g_bItemsSyncing || g_bSchemaDownloading) {
+	if (!g_bSteamWorksLoaded) {
 		return false;
+	}
+	
+	if (g_bLanguageDownloading || g_bSchemaDownloading || g_bItemsSyncing || !SteamWorks_IsConnected()) {
+		return false;
+	}
+	
+	if(g_bRoundEnd) {
+		CreateTimer(0.0, Timer_Wait2, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+		return true;
 	}
 	
 	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, SCHEMAURL);
@@ -796,6 +877,25 @@ public bool RetrieveItemSchema()
 	return false;
 }
 
+public Action Timer_Wait2(Handle hTimer)
+{
+	if (!g_bSteamWorksLoaded) {
+		return Plugin_Stop;
+	}
+	
+	if (g_bLanguageDownloading || g_bSchemaDownloading || g_bItemsSyncing || !SteamWorks_IsConnected()) {
+		return Plugin_Stop;
+	}
+	
+	if(g_bRoundEnd) {
+		return Plugin_Continue;
+	}
+	
+	RetrieveItemSchema();
+	
+	return Plugin_Stop;
+}
+
 public int Schema_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything)
 {
 	if (bRequestSuccessful && eStatusCode == k_EHTTPStatusCode200OK) {
@@ -808,11 +908,15 @@ public int Schema_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccess
 	
 	LogMessage("Item Schema successfully retrieved.");
 	
-	CreateTimer(1.0, Timer_SyncSchema, hRequest);
+	CreateTimer(1.0, Timer_SyncSchema, hRequest, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 }
 
 public Action Timer_SyncSchema(Handle hTimer, Handle hRequest)
 {
+	if(g_bRoundEnd) {
+		return Plugin_Continue;
+	}
+	
 	Handle hSchemaFile = OpenFile("scripts/items/items_game_fixed.txt", "r");
 	Handle hSchemaFileNew = OpenFile("scripts/items/items_game_fixed_new.txt", "r");
 	
@@ -1115,7 +1219,6 @@ public void SyncItemData()
 		}
 		
 		KvGetString(g_hItemsKv, "vmt_path", g_szPaintInfo[g_iPaintCount][VMTPATH], 96);
-		PrecacheMaterial(g_szPaintInfo[g_iPaintCount][VMTPATH]);
 		
 		g_bSkinNumGloveApplicable[g_iPaintCount] = StrContains(g_szPaintInfo[g_iPaintCount][VMTPATH], "paints_gloves", false) > -1;
 		
@@ -1209,7 +1312,6 @@ public void SyncItemData()
 		char szExplode[2][64]; ExplodeString(szBuffer, "/", szExplode, 2, 64);
 		
 		CreateSprayVMT(g_iSprayCount, szExplode[0], szExplode[1], g_szSprayInfo[g_iSprayCount][VTFPATH]);
-		SafePrecacheDecal(g_szSprayInfo[g_iSprayCount][VTFPATH], true);
 		
 		g_iSprayCount++;
 		
@@ -1269,7 +1371,6 @@ public void SyncItemData()
 	
 	Call_StartForward(g_hOnItemsSynced);
 	Call_Finish();
-	OnMapStart();
 	
 	g_bItemsSynced = true;
 	g_bItemsSyncing = false;
@@ -1380,31 +1481,6 @@ public void OnConfigsExecuted()
 	}
 	
 	delete fFile;
-}
-
-public void OnMapStart()
-{
-	if (!g_bItemsSynced || g_bItemsSyncing) {
-		return;
-	}
-	
-	CSGOItems_LoopSkins(iSkinNum) {
-		PrecacheMaterial(g_szPaintInfo[iSkinNum][VMTPATH]);
-	}
-	
-	if (g_bSpraysEnabled) {
-		CSGOItems_LoopSprays(iSprayNum) {
-			AddFileToDownloadsTable(g_szSprayInfo[iSprayNum][VMTPATH]);
-			
-			char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_szSprayInfo[iSprayNum][VMTPATH]);
-			
-			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials/", "", false);
-			ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
-			
-			SafePrecacheDecal(szBuffer, true);
-			PrecacheMaterial(szBuffer);
-		}
-	}
 }
 
 public Action Event_PlayerDeath(Handle hEvent, const char[] szName, bool bDontBroadcast)
@@ -1606,6 +1682,8 @@ stock bool GetClassNameFromIconPath(char[] szIconPath, char[] szReturn)
 		delete rRegex;
 		return false;
 	}
+	
+	delete rRegex;
 	
 	return true;
 }
@@ -2923,7 +3001,7 @@ public int Native_IsSkinNumGloveApplicable(Handle hPlugin, int iNumParams)
 {
 	int iSkinNum = GetNativeCell(1);
 	
-	if (iSkinNum < 0) {
+	if (iSkinNum < 0 || iSkinNum > g_iPaintCount) {
 		return false;
 	}
 	
@@ -3293,6 +3371,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	int iWeapon = -1;
 	bool bGiven = false;
 	
+	/*
 	if (g_bPTAH && g_bSpawnItemFromDefIndex && bKnife) {
 		float fVecOrigin[3]; GetClientAbsOrigin(iClient, fVecOrigin);
 		float fVecAngles[3]; GetClientAbsAngles(iClient, fVecAngles);
@@ -3302,7 +3381,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 		if (IsValidEntity(iWeapon)) {
 			bGiven = true;
 		}
-	}
+	}*/
 	
 	if (!bGiven) {
 		if (bKnife && g_bFollowGuidelines) {
@@ -3320,13 +3399,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 		
 		g_bGivingWeapon[iClient] = false;
 		
-		if (iWeapon > -1 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
-			int iWorldModel = GetEntPropEnt(iWeapon, Prop_Send, "m_hWeaponWorldModel");
-			
-			if (iWorldModel > -1 && IsValidEdict(iWorldModel) && IsValidEntity(iWorldModel)) {
-				AcceptEntityInput(iWorldModel, "Kill");
-			}
-			
+		if (iWeapon > 0 && IsValidEdict(iWeapon) && IsValidEntity(iWeapon)) {
 			AcceptEntityInput(iWeapon, "Kill");
 		}
 		
@@ -3603,20 +3676,10 @@ stock bool RemoveWeapon(int iClient, int iWeapon)
 		return false;
 	}
 	
-	if (!RemovePlayerItem(iClient, iWeapon)) {
-		return false;
-	}
-	
-	int iWorldModel = GetEntPropEnt(iWeapon, Prop_Send, "m_hWeaponWorldModel");
-	
-	if (IsValidEdict(iWorldModel) && IsValidEntity(iWorldModel)) {
-		if (!AcceptEntityInput(iWorldModel, "Kill")) {
+	if(!RemovePlayerItem(iClient, iWeapon)) {
+		if (!DropWeapon(iClient, iWeapon)) {
 			return false;
 		}
-	}
-	
-	if (iWeapon == GetActiveWeapon(iClient)) {
-		SetEntPropEnt(iClient, Prop_Send, "m_hActiveWeapon", -1);
 	}
 	
 	AcceptEntityInput(iWeapon, "Kill");
