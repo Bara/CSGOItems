@@ -221,7 +221,10 @@ CHANGELOG
 			- Sync will wait when its the end of round to prevent crashes.
 			- Remove a couple of useless things.
 			- Next version will rework iteration logic.
-			
+		1.4.5 ~
+			- Added GiveNamedItem hook from PTAH to automatically Equip knives.
+			- Added duplicate Equip call prevention.
+			- Fixed handle errors caused by closing them wrongly.
 			
 ****************************************************************************************************
 INCLUDES
@@ -241,7 +244,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.4.4"
+#define VERSION "1.4.5"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -315,6 +318,7 @@ bool g_bSpraysEnabled = false;
 bool g_bPTAH = false;
 bool g_bSpawnItemFromDefIndex = false;
 bool g_bFollowGuidelines = false;
+bool g_bWeaponEquipped[MAXPLAYERS + 1][2049];
 
 /****************************************************************************************************
 STRINGS.
@@ -376,7 +380,7 @@ public void OnPluginStart()
 	
 	g_hSwitchWeaponCall = EndPrepSDKCall();
 	
-	CloseHandle(hConfig);
+	delete hConfig;
 	
 	HookEvent("player_death", Event_PlayerDeath);
 	HookEvent("round_poststart", OnRoundStart, EventHookMode_Post);
@@ -389,6 +393,12 @@ public void OnPluginStart()
 	
 	g_bPTAH = LibraryExists("PTaH");
 	g_bSpawnItemFromDefIndex = g_bPTAH ? GetFeatureStatus(FeatureType_Native, "PTaH_SpawnItemFromDefIndex") == FeatureStatus_Available : false;
+	
+	#if defined _PTaH_included
+	if (g_bPTAH) {
+		PTaH(PTaH_GiveNamedItem, Hook, GiveNamedItemPost);
+	}
+	#endif
 	
 	AddNormalSoundHook(OnNormalSoundPlayed);
 }
@@ -429,6 +439,8 @@ public Action SteamWorks_RestartRequested()
 	if (hRequest != null) {
 		SteamWorks_SendHTTPRequest(hRequest);
 	}
+	
+	delete hRequest;
 }
 
 public int CallBack_LangUpdated(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything) {
@@ -452,6 +464,10 @@ public void OnLibraryAdded(const char[] szName) {
 		g_bSteamWorksLoaded = true;
 		RetrieveLanguage();
 	} else if (StrEqual(szName, "PTaH")) {
+		if(!g_bPTAH) {
+			PTaH(PTaH_GiveNamedItem, Hook, GiveNamedItemPost);
+		}
+		
 		g_bPTAH = true;
 		g_bSpawnItemFromDefIndex = GetFeatureStatus(FeatureType_Native, "PTaH_SpawnItemFromDefIndex") == FeatureStatus_Available;
 	}
@@ -694,6 +710,83 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] szError, int iEr
 public Action OnRoundStart(Handle hEvent, char[] szName, bool bDontBroadcast) { g_bRoundEnd = false; }
 public Action OnRoundEnd(Handle hEvent, char[] szName, bool bDontBroadcast) { g_bRoundEnd = true; }
 
+public void OnClientPutInServer(int iClient)
+{
+	SDKHook(iClient, SDKHook_WeaponEquip, OnWeaponEquip);
+	SDKHook(iClient, SDKHook_WeaponEquipPost, OnWeaponEquipPost);
+	SDKHook(iClient, SDKHook_WeaponDropPost, OnWeaponDropPost);
+	
+	for (int i = 0; i < 2048; i++) {
+		g_bWeaponEquipped[iClient][i] = false;
+	}
+}
+
+public void OnClientDisconnect(int iClient)
+{
+	for (int i = 0; i < 2048; i++) {
+		g_bWeaponEquipped[iClient][i] = false;
+	}
+}
+
+public void OnEntityDestroyed(int iEntity)
+{
+	if(iEntity < 0 || iEntity > 2048) {
+		return;
+	}
+	
+	for (int i = 1; i <= MaxClients; i++) {
+		g_bWeaponEquipped[i][iEntity] = false;
+	}
+}
+
+public Action OnWeaponEquip(int iClient, int iWeapon)
+{
+	if(g_bWeaponEquipped[iClient][iWeapon]) {
+		return Plugin_Handled;
+	}
+	
+	return Plugin_Continue;
+}
+
+public void OnWeaponEquipPost(int iClient, int iWeapon)
+{
+	g_bWeaponEquipped[iClient][iWeapon] = true;
+	
+	for (int i = 1; i <= MaxClients; i++) {
+		if(i == iClient) {
+			continue;
+		}
+		
+		g_bWeaponEquipped[i][iWeapon] = false;
+	}
+}
+
+public void OnWeaponDropPost(int iClient, int iWeapon)
+{
+	if(iClient < 1 || iClient > MaxClients) {
+		return;
+	}
+	
+	if(iWeapon < 0 || iWeapon > 2048) {
+		iWeapon = EntRefToEntIndex(iWeapon);
+	}
+	
+	if(!IsValidWeapon(iWeapon)) {
+		return;
+	}
+	
+	g_bWeaponEquipped[iClient][iWeapon] = false;
+}
+
+public void GiveNamedItemPost(int iClient, const char[] sClassname, const CEconItemView Item, int iEnt)
+{
+	int iDefIndex = GetWeaponDefIndexByWeapon(iEnt);
+	
+	if(IsDefIndexKnife(iDefIndex) && !g_bWeaponEquipped[iClient][iEnt]) {
+		EquipPlayerWeapon(iClient, iEnt);
+	}
+}
+
 public bool RetrieveLanguage()
 {
 	if (!g_bSteamWorksLoaded) {
@@ -720,12 +813,9 @@ public bool RetrieveLanguage()
 		g_iLanguageDownloadAttempts++;
 		return true;
 	} else {
-		CreateTimer(2.0, Timer_SyncLanguage, hRequest);
+		CreateTimer(2.0, Timer_SyncLanguage);
 		LogMessage("[WARNING] SteamWorks language retrieval failed, attempting to use old file (If one is available)");
-		
-		if (hRequest != null) {
-			CloseHandle(hRequest);
-		}
+		delete hRequest;
 	}
 	
 	return false;
@@ -762,10 +852,11 @@ public int Language_Retrieved(Handle hRequest, bool bFailure, bool bRequestSucce
 	
 	LogMessage("UTF-8 language file successfully retrieved.");
 	
-	CreateTimer(1.0, Timer_SyncLanguage, hRequest, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+	CreateTimer(1.0, Timer_SyncLanguage, -1, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+	delete hRequest;
 }
 
-public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
+public Action Timer_SyncLanguage(Handle hTimer)
 {
 	if(g_bRoundEnd) {
 		return Plugin_Continue;
@@ -775,41 +866,17 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 	Handle hLanguageFileNew = OpenFile("resource/csgo_english_utf8_new.txt", "r");
 	
 	if (hLanguageFileNew != null && ReadFileString(hLanguageFileNew, g_szLangPhrases, 2198296) && StrContains(g_szLangPhrases, "// GAMEUI_ENGLISH.txt") > -1) {
-		if (hLanguageFile != null) {
-			CloseHandle(hLanguageFile);
-			hLanguageFile = null;
-		}
-		
-		CloseHandle(hLanguageFileNew); hLanguageFileNew = null;
-		
 		DeleteFile("resource/csgo_english_utf8.txt");
 		RenameFile("resource/csgo_english_utf8.txt", "resource/csgo_english_utf8_new.txt");
 	}
 	
 	else if (hLanguageFile != null && ReadFileString(hLanguageFile, g_szLangPhrases, 2198296) && StrContains(g_szLangPhrases, "// GAMEUI_ENGLISH.txt") > -1) {
-		if (hLanguageFileNew != null) {
-			CloseHandle(hLanguageFileNew);
-			hLanguageFileNew = null;
-		}
-		
-		CloseHandle(hLanguageFile); hLanguageFile = null;
-		
 		DeleteFile("resource/csgo_english_utf8_new.txt");
 	}
 	else {
 		g_bLanguageDownloading = false;
-		
-		if (hRequest != null) {
-			CloseHandle(hRequest);
-		}
-		
-		if (hLanguageFile != null) {
-			CloseHandle(hLanguageFile);
-		}
-		
-		if (hLanguageFileNew != null) {
-			CloseHandle(hLanguageFileNew);
-		}
+		delete hLanguageFile;
+		delete hLanguageFileNew;
 		
 		DeleteFile("resource/csgo_english_utf8.txt"); DeleteFile("resource/csgo_english_utf8_new.txt");
 		
@@ -823,17 +890,8 @@ public Action Timer_SyncLanguage(Handle hTimer, Handle hRequest)
 		}
 	}
 	
-	if (hRequest != null) {
-		CloseHandle(hRequest);
-	}
-	
-	if (hLanguageFile != null) {
-		CloseHandle(hLanguageFile);
-	}
-	
-	if (hLanguageFileNew != null) {
-		CloseHandle(hLanguageFileNew);
-	}
+	delete hLanguageFile;
+	delete hLanguageFileNew;
 	
 	g_bLanguageDownloading = false;
 	g_iLanguageDownloadAttempts = 0;
@@ -870,8 +928,9 @@ public bool RetrieveItemSchema()
 		g_iSchemaDownloadAttempts++;
 		return true;
 	} else {
-		CreateTimer(2.0, Timer_SyncSchema, hRequest);
+		CreateTimer(2.0, Timer_SyncSchema);
 		LogMessage("[WARNING] SteamWorks schema retrieval failed, attempting to use old file (If one is available)");
+		delete hRequest;
 	}
 	
 	return false;
@@ -908,10 +967,11 @@ public int Schema_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccess
 	
 	LogMessage("Item Schema successfully retrieved.");
 	
-	CreateTimer(1.0, Timer_SyncSchema, hRequest, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+	CreateTimer(1.0, Timer_SyncSchema, -1, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
+	delete hRequest;
 }
 
-public Action Timer_SyncSchema(Handle hTimer, Handle hRequest)
+public Action Timer_SyncSchema(Handle hTimer)
 {
 	if(g_bRoundEnd) {
 		return Plugin_Continue;
@@ -921,41 +981,17 @@ public Action Timer_SyncSchema(Handle hTimer, Handle hRequest)
 	Handle hSchemaFileNew = OpenFile("scripts/items/items_game_fixed_new.txt", "r");
 	
 	if (hSchemaFileNew != null && ReadFileString(hSchemaFileNew, g_szSchemaPhrases, 2198296) && StrContains(g_szSchemaPhrases, "\"items_game\"") > -1) {
-		if (hSchemaFile != null) {
-			CloseHandle(hSchemaFile);
-			hSchemaFile = null;
-		}
-		
-		CloseHandle(hSchemaFileNew); hSchemaFileNew = null;
-		
 		DeleteFile("scripts/items/items_game_fixed.txt");
 		RenameFile("scripts/items/items_game_fixed.txt", "scripts/items/items_game_fixed_new.txt");
 	}
 	
 	else if (hSchemaFile != null && ReadFileString(hSchemaFile, g_szSchemaPhrases, 2198296) && StrContains(g_szSchemaPhrases, "\"items_game\"") > -1) {
-		if (hSchemaFileNew != null) {
-			CloseHandle(hSchemaFileNew);
-			hSchemaFileNew = null;
-		}
-		
-		CloseHandle(hSchemaFile); hSchemaFile = null;
-		
 		DeleteFile("scripts/items/items_game_fixed_new.txt");
-	}
-	else {
+	} else {
 		g_bItemsSyncing = false;
 		
-		if (hRequest != null) {
-			CloseHandle(hRequest);
-		}
-		
-		if (hSchemaFile != null) {
-			CloseHandle(hSchemaFile);
-		}
-		
-		if (hSchemaFileNew != null) {
-			CloseHandle(hSchemaFileNew);
-		}
+		delete hSchemaFile;
+		delete hSchemaFileNew;
 		
 		DeleteFile("scripts/items/items_game_fixed.txt"); DeleteFile("scripts/items/items_game_fixed_new.txt");
 		
@@ -969,17 +1005,8 @@ public Action Timer_SyncSchema(Handle hTimer, Handle hRequest)
 		}
 	}
 	
-	if (hRequest != null) {
-		CloseHandle(hRequest);
-	}
-	
-	if (hSchemaFile != null) {
-		CloseHandle(hSchemaFile);
-	}
-	
-	if (hSchemaFileNew != null) {
-		CloseHandle(hSchemaFileNew);
-	}
+	delete hSchemaFile;
+	delete hSchemaFileNew;
 	
 	g_bSchemaDownloading = false;
 	g_iSchemaDownloadAttempts = 0;
@@ -1346,7 +1373,7 @@ public void SyncItemData()
 		CSGOItems_LoopSkins(iSkinNum) {
 			KvGetString(g_hItemsKv, g_szPaintInfo[iSkinNum][ITEMNAME], g_szPaintInfo[iSkinNum][RARITY], 128);
 		}
-	} while (KvGotoNextKey(g_hItemsKv)); CloseHandle(g_hItemsKv);
+	} while (KvGotoNextKey(g_hItemsKv)); delete g_hItemsKv;
 	
 	CSGOItems_LoopSkins(iSkinNum) {
 		CSGOItems_LoopGloves(iGlovesNum) {
@@ -1425,7 +1452,7 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 		
 		BZ2_CompressFile(szFullFile, szOutFile, 9, Compressed_File);  
 		*/
-		CloseHandle(fFile);
+		delete fFile;
 	}
 	
 	Format(g_szSprayInfo[iSprayNum][VMTPATH], PLATFORM_MAX_PATH, szFullFile);
@@ -1534,7 +1561,7 @@ stock void GetWeaponClip(char[] szClassName, char[] szReturn, int iLength)
 		strcopy(szReturn, iLength, "-1");
 	}
 	
-	CloseHandle(hFile);
+	delete hFile;
 }
 
 stock bool GetWeaponKillAward(char[] szClassName, char[] szReturn, int iLength)
@@ -1568,7 +1595,7 @@ stock bool GetWeaponKillAward(char[] szClassName, char[] szReturn, int iLength)
 		return false;
 	}
 	
-	CloseHandle(hFile);
+	delete hFile;
 	return true;
 }
 
@@ -1603,7 +1630,7 @@ stock bool GetWeaponSpread(char[] szClassName, char[] szReturn, int iLength)
 		return false;
 	}
 	
-	CloseHandle(hFile);
+	delete hFile;
 	return true;
 }
 
@@ -1638,7 +1665,7 @@ stock bool GetWeaponCycleTime(char[] szClassName, char[] szReturn, int iLength)
 		return false;
 	}
 	
-	CloseHandle(hFile);
+	delete hFile;
 	return true;
 }
 
@@ -3408,10 +3435,10 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	
 	iWeaponDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 	
-	if (bKnife) {
-		EquipPlayerWeapon(iClient, iWeapon);
-	} else {
+	if (!bKnife) {
 		SetWeaponAmmo(iWeapon, iReserveAmmo, iClipAmmo);
+	} else if(!g_bPTAH) {
+		EquipPlayerWeapon(iClient, iWeapon);
 	}
 	
 	int iSwitchWeapon = -1;
