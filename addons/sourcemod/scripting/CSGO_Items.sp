@@ -225,6 +225,11 @@ CHANGELOG
 			- Added GiveNamedItem hook from PTAH to automatically Equip knives.
 			- Added duplicate Equip call prevention.
 			- Fixed handle errors caused by closing them wrongly.
+		1.4.6 ~
+			- Increased buffer sizes to fix an out of bounds error.
+			- Reset other variables on resync.
+			- Added back spray precaching.
+			- Fixed a few variables defaults.
 			
 ****************************************************************************************************
 INCLUDES
@@ -239,12 +244,12 @@ INCLUDES
 #include <regex> 
 
 #undef REQUIRE_EXTENSIONS
-#tryinclude <ptah>
+#include <ptah>
 
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.4.5"
+#define VERSION "1.4.6"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -310,8 +315,8 @@ bool g_bItemsSyncing;
 bool g_bLanguageDownloading;
 bool g_bSchemaDownloading;
 bool g_bGivingWeapon[MAXPLAYERS + 1];
-bool g_bIsNativeSkin[1000][100];
-bool g_bIsSkinInSet[100][1000];
+bool g_bIsNativeSkin[1000][1000];
+bool g_bIsSkinInSet[1000][1000];
 bool g_bSteamWorksLoaded = false;
 bool g_bRoundEnd = false;
 bool g_bSpraysEnabled = false;
@@ -323,12 +328,12 @@ bool g_bWeaponEquipped[MAXPLAYERS + 1][2049];
 /****************************************************************************************************
 STRINGS.
 *****************************************************************************************************/
-char g_szWeaponInfo[100][22][48];
+char g_szWeaponInfo[1000][22][48];
 char g_szPaintInfo[1000][22][96];
-char g_szMusicKitInfo[100][3][48];
-char g_szGlovesInfo[100][22][96];
+char g_szMusicKitInfo[1000][3][48];
+char g_szGlovesInfo[1000][22][96];
 char g_szSprayInfo[1000][22][128];
-char g_szItemSetInfo[100][3][48];
+char g_szItemSetInfo[1000][3][48];
 char g_szLangPhrases[2198296];
 char g_szSchemaPhrases[2198296];
 char g_szCDNPhrases[2198296];
@@ -463,10 +468,8 @@ public void OnLibraryAdded(const char[] szName) {
 	if (StrEqual(szName, "SteamWorks")) {
 		g_bSteamWorksLoaded = true;
 		RetrieveLanguage();
-	} else if (StrEqual(szName, "PTaH")) {
-		if(!g_bPTAH) {
-			PTaH(PTaH_GiveNamedItem, Hook, GiveNamedItemPost);
-		}
+	} else if (StrEqual(szName, "PTaH") && !g_bPTAH) {
+		PTaH(PTaH_GiveNamedItem, Hook, GiveNamedItemPost);
 		
 		g_bPTAH = true;
 		g_bSpawnItemFromDefIndex = GetFeatureStatus(FeatureType_Native, "PTaH_SpawnItemFromDefIndex") == FeatureStatus_Available;
@@ -730,7 +733,7 @@ public void OnClientDisconnect(int iClient)
 
 public void OnEntityDestroyed(int iEntity)
 {
-	if(iEntity < 0 || iEntity > 2048) {
+	if (iEntity < 0 || iEntity > 2048) {
 		return;
 	}
 	
@@ -741,7 +744,7 @@ public void OnEntityDestroyed(int iEntity)
 
 public Action OnWeaponEquip(int iClient, int iWeapon)
 {
-	if(g_bWeaponEquipped[iClient][iWeapon]) {
+	if (g_bWeaponEquipped[iClient][iWeapon]) {
 		return Plugin_Handled;
 	}
 	
@@ -753,7 +756,7 @@ public void OnWeaponEquipPost(int iClient, int iWeapon)
 	g_bWeaponEquipped[iClient][iWeapon] = true;
 	
 	for (int i = 1; i <= MaxClients; i++) {
-		if(i == iClient) {
+		if (i == iClient) {
 			continue;
 		}
 		
@@ -763,15 +766,15 @@ public void OnWeaponEquipPost(int iClient, int iWeapon)
 
 public void OnWeaponDropPost(int iClient, int iWeapon)
 {
-	if(iClient < 1 || iClient > MaxClients) {
+	if (iClient < 1 || iClient > MaxClients) {
 		return;
 	}
 	
-	if(iWeapon < 0 || iWeapon > 2048) {
+	if (iWeapon < 0 || iWeapon > 2048) {
 		iWeapon = EntRefToEntIndex(iWeapon);
 	}
 	
-	if(!IsValidWeapon(iWeapon)) {
+	if (!IsValidWeapon(iWeapon)) {
 		return;
 	}
 	
@@ -782,7 +785,7 @@ public void GiveNamedItemPost(int iClient, const char[] sClassname, const CEconI
 {
 	int iDefIndex = GetWeaponDefIndexByWeapon(iEnt);
 	
-	if(IsDefIndexKnife(iDefIndex) && !g_bWeaponEquipped[iClient][iEnt]) {
+	if (IsDefIndexKnife(iDefIndex) && !g_bWeaponEquipped[iClient][iEnt]) {
 		EquipPlayerWeapon(iClient, iEnt);
 	}
 }
@@ -797,7 +800,7 @@ public bool RetrieveLanguage()
 		return false;
 	}
 	
-	if(g_bRoundEnd) {
+	if (g_bRoundEnd) {
 		CreateTimer(0.0, Timer_Wait1, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 		return true;
 	}
@@ -831,7 +834,7 @@ public Action Timer_Wait1(Handle hTimer)
 		return Plugin_Stop;
 	}
 	
-	if(g_bRoundEnd) {
+	if (g_bRoundEnd) {
 		return Plugin_Continue;
 	}
 	
@@ -858,7 +861,7 @@ public int Language_Retrieved(Handle hRequest, bool bFailure, bool bRequestSucce
 
 public Action Timer_SyncLanguage(Handle hTimer)
 {
-	if(g_bRoundEnd) {
+	if (g_bRoundEnd) {
 		return Plugin_Continue;
 	}
 	
@@ -912,7 +915,7 @@ public bool RetrieveItemSchema()
 		return false;
 	}
 	
-	if(g_bRoundEnd) {
+	if (g_bRoundEnd) {
 		CreateTimer(0.0, Timer_Wait2, _, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
 		return true;
 	}
@@ -946,7 +949,7 @@ public Action Timer_Wait2(Handle hTimer)
 		return Plugin_Stop;
 	}
 	
-	if(g_bRoundEnd) {
+	if (g_bRoundEnd) {
 		return Plugin_Continue;
 	}
 	
@@ -973,7 +976,7 @@ public int Schema_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccess
 
 public Action Timer_SyncSchema(Handle hTimer)
 {
-	if(g_bRoundEnd) {
+	if (g_bRoundEnd) {
 		return Plugin_Continue;
 	}
 	
@@ -1029,9 +1032,14 @@ public void SyncItemData()
 	delete hFile;
 	
 	g_bItemsSyncing = true;
+	
 	g_iPaintCount = 0;
 	g_iWeaponCount = 0;
 	g_iMusicKitCount = 0;
+	g_iGlovesCount = 0;
+	g_iGlovesPaintCount = 0;
+	g_iItemSetCount = 0;
+	g_iSprayCount = 0;
 	
 	g_hItemsKv = CreateKeyValues("items_game");
 	
@@ -1508,6 +1516,27 @@ public void OnConfigsExecuted()
 	}
 	
 	delete fFile;
+}
+
+public void OnMapStart()
+{
+	if (!g_bItemsSynced || g_bItemsSyncing) {
+		return;
+	}
+	
+	if (g_bSpraysEnabled) {
+		CSGOItems_LoopSprays(iSprayNum) {
+			AddFileToDownloadsTable(g_szSprayInfo[iSprayNum][VMTPATH]);
+			
+			char szBuffer[PLATFORM_MAX_PATH]; strcopy(szBuffer, PLATFORM_MAX_PATH, g_szSprayInfo[iSprayNum][VMTPATH]);
+			
+			ReplaceString(szBuffer, PLATFORM_MAX_PATH, "materials/", "", false);
+			ReplaceString(szBuffer, PLATFORM_MAX_PATH, ".vmt", "", false);
+			
+			SafePrecacheDecal(szBuffer, true);
+			PrecacheMaterial(szBuffer);
+		}
+	}
 }
 
 public Action Event_PlayerDeath(Handle hEvent, const char[] szName, bool bDontBroadcast)
@@ -2180,7 +2209,7 @@ public int Native_GetWeaponSpreadByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	if (iDefIndex < 0 || iDefIndex > 700) {
-		return view_as<int>(0.0);
+		return view_as<int>(-1.0);
 	}
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
@@ -2189,7 +2218,7 @@ public int Native_GetWeaponSpreadByDefIndex(Handle hPlugin, int iNumParams)
 		}
 	}
 	
-	return view_as<int>(0.0);
+	return view_as<int>(-1.0);
 }
 
 public int Native_GetWeaponSpreadByClassName(Handle hPlugin, int iNumParams)
@@ -2202,7 +2231,7 @@ public int Native_GetWeaponSpreadByClassName(Handle hPlugin, int iNumParams)
 		}
 	}
 	
-	return view_as<int>(0.0);
+	return view_as<int>(-1.0);
 }
 
 public int Native_GetWeaponSpreadByWeaponNum(Handle hPlugin, int iNumParams)
@@ -2233,7 +2262,7 @@ public int Native_GetWeaponCycleTimeByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	if (iDefIndex < 0 || iDefIndex > 700) {
-		return view_as<int>(0.0);
+		return view_as<int>(-1.0);
 	}
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
@@ -2242,7 +2271,7 @@ public int Native_GetWeaponCycleTimeByDefIndex(Handle hPlugin, int iNumParams)
 		}
 	}
 	
-	return view_as<int>(0.0);
+	return view_as<int>(-1.0);
 }
 
 public int Native_GetWeaponCycleTimeByClassName(Handle hPlugin, int iNumParams)
@@ -2255,7 +2284,7 @@ public int Native_GetWeaponCycleTimeByClassName(Handle hPlugin, int iNumParams)
 		}
 	}
 	
-	return view_as<int>(0.0);
+	return view_as<int>(-1.0);
 }
 
 public int Native_GetWeaponCycleTimeByWeaponNum(Handle hPlugin, int iNumParams)
@@ -2286,7 +2315,7 @@ public int Native_GetWeaponReserveAmmoByDefIndex(Handle hPlugin, int iNumParams)
 	int iDefIndex = GetNativeCell(1);
 	
 	if (iDefIndex < 0 || iDefIndex > 700) {
-		return view_as<int>(0.0);
+		return view_as<int>(-1.0);
 	}
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
@@ -2295,7 +2324,7 @@ public int Native_GetWeaponReserveAmmoByDefIndex(Handle hPlugin, int iNumParams)
 		}
 	}
 	
-	return view_as<int>(0.0);
+	return view_as<int>(-1.0);
 }
 
 public int Native_GetWeaponReserveAmmoByClassName(Handle hPlugin, int iNumParams)
@@ -2308,7 +2337,7 @@ public int Native_GetWeaponReserveAmmoByClassName(Handle hPlugin, int iNumParams
 		}
 	}
 	
-	return view_as<int>(0.0);
+	return view_as<int>(-1.0);
 }
 
 public int Native_GetWeaponReserveAmmoByWeaponNum(Handle hPlugin, int iNumParams)
@@ -3323,12 +3352,12 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	int iHudFlags = GetEntProp(iClient, Prop_Send, "m_iHideHUD");
 	
 	float fNextPlayerAttackTime = GetEntPropFloat(iClient, Prop_Send, "m_flNextAttack");
-	float fDoneSwitchingSilencer = 0.0;
-	float fNextPrimaryAttack = 0.0;
-	float fNextSecondaryAttack = 0.0;
-	float fTimeWeaponIdle = 0.0;
-	float fAccuracyPenalty = 0.0;
-	float fLastShotTime = 0.0;
+	float fDoneSwitchingSilencer = -1.0;
+	float fNextPrimaryAttack = -1.0;
+	float fNextSecondaryAttack = -1.0;
+	float fTimeWeaponIdle = -1.0;
+	float fAccuracyPenalty = -1.0;
+	float fLastShotTime = -1.0;
 	
 	char szCurrentClassName[48];
 	bool bKnife = IsDefIndexKnife(iWeaponDefIndex);
@@ -3339,19 +3368,15 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_flNextPrimaryAttack")) {
 			fNextPrimaryAttack = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_flNextPrimaryAttack");
 		}
-		
 		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_flNextSecondaryAttack")) {
 			fNextSecondaryAttack = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_flNextSecondaryAttack");
 		}
-		
 		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_flTimeWeaponIdle")) {
 			fTimeWeaponIdle = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_flTimeWeaponIdle");
 		}
-		
 		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_fAccuracyPenalty")) {
 			fAccuracyPenalty = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_fAccuracyPenalty");
 		}
-		
 		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_bReloadVisuallyComplete")) {
 			iReloadVisuallyComplete = GetEntProp(iCurrentWeapon, Prop_Send, "m_bReloadVisuallyComplete");
 		}
@@ -3373,7 +3398,6 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_fLastShotTime")) {
 			fLastShotTime = GetEntPropFloat(iCurrentWeapon, Prop_Send, "m_fLastShotTime");
 		}
-		
 		if (HasEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel")) {
 			iZoomLevel = GetEntProp(iCurrentWeapon, Prop_Send, "m_zoomLevel");
 		}
@@ -3398,17 +3422,16 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	int iWeapon = -1;
 	bool bGiven = false;
 	
-	/*
 	if (g_bPTAH && g_bSpawnItemFromDefIndex && bKnife) {
 		float fVecOrigin[3]; GetClientAbsOrigin(iClient, fVecOrigin);
 		float fVecAngles[3]; GetClientAbsAngles(iClient, fVecAngles);
 		
 		iWeapon = PTaH_SpawnItemFromDefIndex(iWeaponDefIndex, fVecOrigin, fVecAngles);
 		
-		if (IsValidEntity(iWeapon)) {
+		if (IsValidWeapon(iWeapon)) {
 			bGiven = true;
 		}
-	}*/
+	}
 	
 	if (!bGiven) {
 		if (bKnife && g_bFollowGuidelines) {
@@ -3416,7 +3439,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 		}
 		
 		iWeapon = GivePlayerItem(iClient, szClassName);
-		bGiven = iWeapon > -1;
+		bGiven = IsValidWeapon(iWeapon);
 	}
 	
 	if (!IsValidWeapon(iWeapon) || !bGiven) {
@@ -3437,7 +3460,7 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	
 	if (!bKnife) {
 		SetWeaponAmmo(iWeapon, iReserveAmmo, iClipAmmo);
-	} else if(!g_bPTAH) {
+	} else {
 		EquipPlayerWeapon(iClient, iWeapon);
 	}
 	
@@ -3459,55 +3482,42 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 				if (iLookingAtWeapon > -1 && HasEntProp(iClient, Prop_Send, "m_bIsLookingAtWeapon")) {
 					SetEntProp(iClient, Prop_Send, "m_bIsLookingAtWeapon", iLookingAtWeapon);
 				}
-				
 				if (iHoldingLookAtWeapon > -1 && HasEntProp(iClient, Prop_Send, "m_bIsHoldingLookAtWeapon")) {
 					SetEntProp(iClient, Prop_Send, "m_bIsHoldingLookAtWeapon", iHoldingLookAtWeapon);
 				}
-				
-				if (fNextPlayerAttackTime > 0.0 && HasEntProp(iClient, Prop_Send, "m_flNextAttack")) {
+				if (fNextPlayerAttackTime > -1.0 && HasEntProp(iClient, Prop_Send, "m_flNextAttack")) {
 					SetEntPropFloat(iClient, Prop_Send, "m_flNextAttack", fNextPlayerAttackTime);
 				}
-				
-				if (fNextPrimaryAttack > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flNextPrimaryAttack")) {
+				if (fNextPrimaryAttack > -1.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flNextPrimaryAttack")) {
 					SetEntPropFloat(iWeapon, Prop_Send, "m_flNextPrimaryAttack", fNextPrimaryAttack);
 				}
-				
-				if (fNextSecondaryAttack > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flNextSecondaryAttack")) {
+				if (fNextSecondaryAttack > -1.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flNextSecondaryAttack")) {
 					SetEntPropFloat(iWeapon, Prop_Send, "m_flNextSecondaryAttack", fNextSecondaryAttack);
 				}
-				
-				if (fTimeWeaponIdle > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flTimeWeaponIdle")) {
+				if (fTimeWeaponIdle > -1.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flTimeWeaponIdle")) {
 					SetEntPropFloat(iWeapon, Prop_Send, "m_flTimeWeaponIdle", fTimeWeaponIdle);
 				}
-				
-				if (fAccuracyPenalty > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_fAccuracyPenalty")) {
+				if (fAccuracyPenalty > -1.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_fAccuracyPenalty")) {
 					SetEntPropFloat(iWeapon, Prop_Send, "m_fAccuracyPenalty", fAccuracyPenalty);
 				}
-				
-				if (fDoneSwitchingSilencer > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flDoneSwitchingSilencer")) {
+				if (fDoneSwitchingSilencer > -1.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_flDoneSwitchingSilencer")) {
 					SetEntPropFloat(iWeapon, Prop_Send, "m_flDoneSwitchingSilencer", fDoneSwitchingSilencer);
 				}
-				
-				if (fLastShotTime > 0.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_fLastShotTime")) {
+				if (fLastShotTime > -1.0 && HasEntProp(iCurrentWeapon, Prop_Send, "m_fLastShotTime")) {
 					SetEntPropFloat(iWeapon, Prop_Send, "m_fLastShotTime", fLastShotTime);
 				}
-				
 				if (iReloadVisuallyComplete > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_bReloadVisuallyComplete")) {
 					SetEntProp(iWeapon, Prop_Send, "m_bReloadVisuallyComplete", iReloadVisuallyComplete);
 				}
-				
 				if (iWeaponSilencer > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_bSilencerOn")) {
 					SetEntProp(iWeapon, Prop_Send, "m_bSilencerOn", iWeaponSilencer);
 				}
-				
 				if (iWeaponMode > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_weaponMode")) {
 					SetEntProp(iWeapon, Prop_Send, "m_weaponMode", iWeaponMode);
 				}
-				
 				if (iRecoilIndex > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_iRecoilIndex")) {
 					SetEntProp(iWeapon, Prop_Send, "m_iRecoilIndex", iRecoilIndex);
 				}
-				
 				if (iIronSightMode > -1 && HasEntProp(iCurrentWeapon, Prop_Send, "m_iIronSightMode")) {
 					SetEntProp(iWeapon, Prop_Send, "m_iIronSightMode", iIronSightMode);
 				}
@@ -3703,7 +3713,7 @@ stock bool RemoveWeapon(int iClient, int iWeapon)
 		return false;
 	}
 	
-	if(!RemovePlayerItem(iClient, iWeapon)) {
+	if (!RemovePlayerItem(iClient, iWeapon)) {
 		if (!DropWeapon(iClient, iWeapon)) {
 			return false;
 		}
