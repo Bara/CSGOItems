@@ -230,6 +230,9 @@ CHANGELOG
 			- Reset other variables on resync.
 			- Added back spray precaching.
 			- Fixed a few variables defaults.
+		1.4.7 ~
+			- Massively reduced Item syncing time.
+			- Fix an issue where native skins boolean could potentially get set to false after its already true.
 			
 ****************************************************************************************************
 INCLUDES
@@ -249,7 +252,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.4.6"
+#define VERSION "1.4.7"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -336,7 +339,7 @@ char g_szSprayInfo[1000][22][128];
 char g_szItemSetInfo[1000][3][48];
 char g_szLangPhrases[2198296];
 char g_szSchemaPhrases[2198296];
-char g_szCDNPhrases[2198296];
+char g_szCDNPhrases[2000][384];
 
 /****************************************************************************************************
 INTS.
@@ -1014,19 +1017,43 @@ public Action Timer_SyncSchema(Handle hTimer)
 	g_bSchemaDownloading = false;
 	g_iSchemaDownloadAttempts = 0;
 	
+	int iStart = GetTime();
+	
 	LogMessage("Item Schema successfully processed, syncing item data.");
 	
 	SyncItemData();
+	
+	int iEnd = GetTime();
+	LogMessage("Item data synced in %d seconds.", iEnd - iStart);
 	
 	return Plugin_Stop;
 }
 
 public void SyncItemData()
 {
-	Handle hFile = OpenFile("scripts/items/items_game_cdn.txt", "r");
+	File hFile = OpenFile("scripts/items/items_game_cdn.txt", "r");
+	
+	int iCDNPhraseCount = 0;
 	
 	if (hFile != null) {
-		ReadFileString(hFile, g_szCDNPhrases, 2198296);
+		char szBuffer[384];
+		int iLen;
+		
+		while (hFile.ReadLine(szBuffer, sizeof(szBuffer))) {
+			iLen = strlen(szBuffer);
+			
+			if (szBuffer[iLen - 1] == '\n') {
+				szBuffer[--iLen] = '\0';
+			}
+			
+			TrimString(szBuffer);
+			SplitString(szBuffer, "=", szBuffer, sizeof(szBuffer));
+			strcopy(g_szCDNPhrases[iCDNPhraseCount++], sizeof(g_szCDNPhrases[]), szBuffer);
+			
+			if (hFile.EndOfFile()) {
+				break;
+			}
+		}
 	}
 	
 	delete hFile;
@@ -1056,6 +1083,7 @@ public void SyncItemData()
 	}
 	
 	char szBuffer[128]; char szBuffer2[48]; char szBuffer3[48][48];
+	int iDefIndex = 0;
 	
 	do {
 		KvGetString(g_hItemsKv, "name", szBuffer2, 48);
@@ -1257,6 +1285,41 @@ public void SyncItemData()
 		
 		g_bSkinNumGloveApplicable[g_iPaintCount] = StrContains(g_szPaintInfo[g_iPaintCount][VMTPATH], "paints_gloves", false) > -1;
 		
+		CSGOItems_LoopWeapons(iWeaponNum) {
+			if (!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
+				continue;
+			}
+			
+			iDefIndex = GetWeaponDefIndexByClassName(szBuffer2);
+			
+			if (!IsSkinnableDefIndex(iDefIndex)) {
+				continue;
+			}
+			
+			Format(szBuffer, sizeof(szBuffer), "%s_%s", szBuffer2, g_szPaintInfo[g_iPaintCount][ITEMNAME]);
+			
+			for (int i = 0; i < iCDNPhraseCount; i++) {
+				if (g_bIsNativeSkin[g_iPaintCount][iWeaponNum]) {
+					continue;
+				}
+				
+				g_bIsNativeSkin[g_iPaintCount][iWeaponNum] = StrEqual(g_szCDNPhrases[i], szBuffer, false);
+			}
+		}
+		
+		CSGOItems_LoopGloves(iGlovesNum) {
+			strcopy(szBuffer, 64, g_szGlovesInfo[iGlovesNum][CLASSNAME]);
+			
+			if (StrEqual(szBuffer, "leather_handwraps", false)) {
+				strcopy(szBuffer, 64, "handwrap");
+			} else {
+				ReplaceString(szBuffer, 64, "_gloves", "", false);
+				ReplaceString(szBuffer, 64, "studded_", "", false);
+			}
+			
+			g_bIsNativeSkin[g_iPaintCount][iGlovesNum] = StrContains(g_szPaintInfo[g_iPaintCount][ITEMNAME], szBuffer, false) > -1;
+		}
+		
 		if (g_bSkinNumGloveApplicable[g_iPaintCount]) {
 			g_iGlovesPaintCount++;
 		}
@@ -1352,25 +1415,6 @@ public void SyncItemData()
 		
 	} while (KvGotoNextKey(g_hItemsKv)); KvRewind(g_hItemsKv);
 	
-	int iDefIndex;
-	
-	CSGOItems_LoopWeapons(iWeaponNum) {
-		if (!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
-			continue;
-		}
-		
-		iDefIndex = GetWeaponDefIndexByClassName(szBuffer2);
-		
-		if (!IsSkinnableDefIndex(iDefIndex)) {
-			continue;
-		}
-		
-		CSGOItems_LoopSkins(iSkinNum) {
-			Format(szBuffer, sizeof(szBuffer), "%s_%s", szBuffer2, g_szPaintInfo[iSkinNum][ITEMNAME]);
-			g_bIsNativeSkin[iSkinNum][iWeaponNum] = StrContains(g_szCDNPhrases, szBuffer, false) != -1;
-		}
-	}
-	
 	if (!KvJumpToKey(g_hItemsKv, "paint_kits_rarity")) {
 		Call_StartForward(g_hOnPluginEnd);
 		Call_Finish();
@@ -1382,27 +1426,6 @@ public void SyncItemData()
 			KvGetString(g_hItemsKv, g_szPaintInfo[iSkinNum][ITEMNAME], g_szPaintInfo[iSkinNum][RARITY], 128);
 		}
 	} while (KvGotoNextKey(g_hItemsKv)); delete g_hItemsKv;
-	
-	CSGOItems_LoopSkins(iSkinNum) {
-		CSGOItems_LoopGloves(iGlovesNum) {
-			strcopy(szBuffer, 64, g_szGlovesInfo[iGlovesNum][CLASSNAME]);
-			
-			if (StrEqual(szBuffer, "leather_handwraps", false)) {
-				strcopy(szBuffer, 64, "handwrap");
-			} else {
-				ReplaceString(szBuffer, 64, "_gloves", "", false);
-				ReplaceString(szBuffer, 64, "studded_", "", false);
-			}
-			
-			if (strlen(szBuffer) < 4) {
-				continue;
-			}
-			
-			if (StrContains(g_szPaintInfo[iSkinNum][ITEMNAME], szBuffer, false) > -1) {
-				g_bIsNativeSkin[iSkinNum][iGlovesNum] = true;
-			}
-		}
-	}
 	
 	Call_StartForward(g_hOnItemsSynced);
 	Call_Finish();
