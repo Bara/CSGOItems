@@ -233,6 +233,12 @@ CHANGELOG
 		1.4.7 ~
 			- Massively reduced Item syncing time.
 			- Fix an issue where native skins boolean could potentially get set to false after its already true.
+		1.4.8 ~
+			- Fixed CSGOItems_IsNativeSkin
+				- It now has an extra parameter to specify the item type (Currently ITEMTYPE_WEAPON OR ITEMTYPE_GLOVES).
+				- For example CSGOItems_IsNativeSkin(iSkinNum, iWeaponNum, ITEMTYPE_WEAPON) or CSGOItems_IsNativeSkin(iSkinNum, iGlovesNum, ITEMTYPE_GLOVES)
+			- Slight improvement to sync speed again.
+			- Replaced Format with FormatEx as its faster.
 			
 ****************************************************************************************************
 INCLUDES
@@ -252,7 +258,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.4.7"
+#define VERSION "1.4.8"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -318,7 +324,7 @@ bool g_bItemsSyncing;
 bool g_bLanguageDownloading;
 bool g_bSchemaDownloading;
 bool g_bGivingWeapon[MAXPLAYERS + 1];
-bool g_bIsNativeSkin[1000][1000];
+bool g_bIsNativeSkin[3][1000][1000];
 bool g_bIsSkinInSet[1000][1000];
 bool g_bSteamWorksLoaded = false;
 bool g_bRoundEnd = false;
@@ -1286,6 +1292,10 @@ public void SyncItemData()
 		g_bSkinNumGloveApplicable[g_iPaintCount] = StrContains(g_szPaintInfo[g_iPaintCount][VMTPATH], "paints_gloves", false) > -1;
 		
 		CSGOItems_LoopWeapons(iWeaponNum) {
+			if(g_bIsNativeSkin[ITEMTYPE_WEAPON][g_iPaintCount][iWeaponNum]) {
+				break;
+			}
+			
 			if (!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
 				continue;
 			}
@@ -1296,28 +1306,39 @@ public void SyncItemData()
 				continue;
 			}
 			
-			Format(szBuffer, sizeof(szBuffer), "%s_%s", szBuffer2, g_szPaintInfo[g_iPaintCount][ITEMNAME]);
+			FormatEx(szBuffer, sizeof(szBuffer), "%s_%s", szBuffer2, g_szPaintInfo[g_iPaintCount][ITEMNAME]);
 			
 			for (int i = 0; i < iCDNPhraseCount; i++) {
-				if (g_bIsNativeSkin[g_iPaintCount][iWeaponNum]) {
-					continue;
+				if (g_bIsNativeSkin[ITEMTYPE_WEAPON][g_iPaintCount][iWeaponNum]) {
+					break;
 				}
 				
-				g_bIsNativeSkin[g_iPaintCount][iWeaponNum] = StrEqual(g_szCDNPhrases[i], szBuffer, false);
+				g_bIsNativeSkin[ITEMTYPE_WEAPON][g_iPaintCount][iWeaponNum] = StrEqual(g_szCDNPhrases[i], szBuffer, false);
+				
+				if(g_bIsNativeSkin[ITEMTYPE_WEAPON][g_iPaintCount][iWeaponNum]) {
+					break;
+				}
 			}
 		}
 		
 		CSGOItems_LoopGloves(iGlovesNum) {
-			strcopy(szBuffer, 64, g_szGlovesInfo[iGlovesNum][CLASSNAME]);
-			
-			if (StrEqual(szBuffer, "leather_handwraps", false)) {
-				strcopy(szBuffer, 64, "handwrap");
-			} else {
-				ReplaceString(szBuffer, 64, "_gloves", "", false);
-				ReplaceString(szBuffer, 64, "studded_", "", false);
+			if(g_bIsNativeSkin[ITEMTYPE_GLOVES][g_iPaintCount][iGlovesNum]) {
+				break;
 			}
 			
-			g_bIsNativeSkin[g_iPaintCount][iGlovesNum] = StrContains(g_szPaintInfo[g_iPaintCount][ITEMNAME], szBuffer, false) > -1;
+			FormatEx(szBuffer, sizeof(szBuffer), "%s_%s", g_szGlovesInfo[iGlovesNum][CLASSNAME], g_szPaintInfo[g_iPaintCount][ITEMNAME]);
+			
+			for (int i = 0; i < iCDNPhraseCount; i++) {
+				if (g_bIsNativeSkin[ITEMTYPE_GLOVES][g_iPaintCount][iGlovesNum]) {
+					break;
+				}
+				
+				g_bIsNativeSkin[ITEMTYPE_GLOVES][g_iPaintCount][iGlovesNum] = StrEqual(g_szCDNPhrases[i], szBuffer, false);
+				
+				if(g_bIsNativeSkin[ITEMTYPE_GLOVES][g_iPaintCount][iGlovesNum]) {
+					break;
+				}
+			}
 		}
 		
 		if (g_bSkinNumGloveApplicable[g_iPaintCount]) {
@@ -1394,7 +1415,7 @@ public void SyncItemData()
 		
 		KvGetString(g_hItemsKv, "sticker_material", szBuffer, 48);
 		
-		Format(g_szSprayInfo[g_iSprayCount][VTFPATH], PLATFORM_MAX_PATH, "decals/sprays/%s.vtf", szBuffer);
+		FormatEx(g_szSprayInfo[g_iSprayCount][VTFPATH], PLATFORM_MAX_PATH, "decals/sprays/%s.vtf", szBuffer);
 		
 		KvGetString(g_hItemsKv, "item_name", szBuffer2, 48);
 		
@@ -1436,8 +1457,8 @@ public void SyncItemData()
 
 stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] szFile, const char[] szTexturePath)
 {
-	char szFullDirectory[PLATFORM_MAX_PATH]; Format(szFullDirectory, PLATFORM_MAX_PATH, "materials/csgoitemsv2/sprays/%s", szDirectory);
-	char szFullFile[PLATFORM_MAX_PATH]; Format(szFullFile, PLATFORM_MAX_PATH, "%s/%s.vmt", szFullDirectory, szFile);
+	char szFullDirectory[PLATFORM_MAX_PATH]; FormatEx(szFullDirectory, PLATFORM_MAX_PATH, "materials/csgoitemsv2/sprays/%s", szDirectory);
+	char szFullFile[PLATFORM_MAX_PATH]; FormatEx(szFullFile, PLATFORM_MAX_PATH, "%s/%s.vmt", szFullDirectory, szFile);
 	char szPieces[32][PLATFORM_MAX_PATH];
 	char szPath[PLATFORM_MAX_PATH];
 	char szTexturePathFormat[128];
@@ -1446,7 +1467,7 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 	int iNumPieces = ExplodeString(szFullDirectory, "/", szPieces, sizeof(szPieces), sizeof(szPieces[]));
 	
 	for (int i = 0; i < iNumPieces; i++) {
-		Format(szPath, sizeof(szPath), "%s/%s", szPath, szPieces[i]);
+		FormatEx(szPath, sizeof(szPath), "%s/%s", szPath, szPieces[i]);
 		
 		if (DirExists(szPath)) {
 			continue;
@@ -1462,7 +1483,7 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 			return false;
 		}
 		
-		Format(szTexturePathFormat, 128, "\"$basetexture\"	\"%s\"", szTexturePath);
+		FormatEx(szTexturePathFormat, 128, "\"$basetexture\"	\"%s\"", szTexturePath);
 		ReplaceString(szTexturePathFormat, 128, ".vtf", "", false);
 		
 		fFile.WriteLine("LightmappedGeneric");
@@ -1475,7 +1496,7 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 		fFile.WriteLine("}");
 		
 		/*
-		Format(szOutFile, PLATFORM_MAX_PATH, "%s.bz2", szFullFile);
+		FormatEx(szOutFile, PLATFORM_MAX_PATH, "%s.bz2", szFullFile);
 		
 		DataPack dPack = CreateDataPack();
 		dPack.WriteString(szDirectory);
@@ -1486,7 +1507,7 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 		delete fFile;
 	}
 	
-	Format(g_szSprayInfo[iSprayNum][VMTPATH], PLATFORM_MAX_PATH, szFullFile);
+	FormatEx(g_szSprayInfo[iSprayNum][VMTPATH], PLATFORM_MAX_PATH, szFullFile);
 	
 	return true;
 }
@@ -1591,7 +1612,7 @@ stock void GetItemName(char[] szPhrase, char[] szBuffer, int iLength)
 
 stock void GetWeaponClip(char[] szClassName, char[] szReturn, int iLength)
 {
-	char szBuffer[128]; Format(szBuffer, 64, "scripts/%s.txt", szClassName);
+	char szBuffer[128]; FormatEx(szBuffer, 64, "scripts/%s.txt", szClassName);
 	
 	Handle hFile = OpenFile(szBuffer, "r");
 	
@@ -1621,9 +1642,9 @@ stock bool GetWeaponKillAward(char[] szClassName, char[] szReturn, int iLength)
 	char szBuffer[128];
 	
 	if (IsDefIndexKnife(GetWeaponDefIndexByClassName(szClassName))) {
-		Format(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
+		FormatEx(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
 	} else {
-		Format(szBuffer, 64, "scripts/%s.txt", szClassName);
+		FormatEx(szBuffer, 64, "scripts/%s.txt", szClassName);
 	}
 	
 	Handle hFile = OpenFile(szBuffer, "r");
@@ -1656,9 +1677,9 @@ stock bool GetWeaponSpread(char[] szClassName, char[] szReturn, int iLength)
 	char szBuffer[128];
 	
 	if (IsDefIndexKnife(GetWeaponDefIndexByClassName(szClassName))) {
-		Format(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
+		FormatEx(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
 	} else {
-		Format(szBuffer, 64, "scripts/%s.txt", szClassName);
+		FormatEx(szBuffer, 64, "scripts/%s.txt", szClassName);
 	}
 	
 	Handle hFile = OpenFile(szBuffer, "r");
@@ -1691,9 +1712,9 @@ stock bool GetWeaponCycleTime(char[] szClassName, char[] szReturn, int iLength)
 	char szBuffer[128];
 	
 	if (IsDefIndexKnife(GetWeaponDefIndexByClassName(szClassName))) {
-		Format(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
+		FormatEx(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
 	} else {
-		Format(szBuffer, 64, "scripts/%s.txt", szClassName);
+		FormatEx(szBuffer, 64, "scripts/%s.txt", szClassName);
 	}
 	
 	Handle hFile = OpenFile(szBuffer, "r");
@@ -2896,8 +2917,13 @@ public int Native_IsNativeSkin(Handle hPlugin, int iNumParams)
 {
 	int iSkinNum = GetNativeCell(1);
 	int iItemNum = GetNativeCell(2);
+	int iItemType = GetNativeCell(3);
 	
-	return g_bIsNativeSkin[iSkinNum][iItemNum];
+	if(iItemType < 0 || iItemType > 1) {
+		return false;
+	}
+	
+	return g_bIsNativeSkin[iItemType][iSkinNum][iItemNum];
 }
 
 public int Native_GetWeaponNumBySkinNum(Handle hPlugin, int iNumParams)
@@ -2909,7 +2935,7 @@ public int Native_GetWeaponNumBySkinNum(Handle hPlugin, int iNumParams)
 	}
 	
 	CSGOItems_LoopWeapons(iWeaponNum) {
-		if (g_bIsNativeSkin[iSkinNum][iWeaponNum]) {
+		if (g_bIsNativeSkin[ITEMTYPE_WEAPON][iSkinNum][iWeaponNum]) {
 			return iWeaponNum;
 		}
 	}
@@ -2926,7 +2952,7 @@ public int Native_GetGlovesNumBySkinNum(Handle hPlugin, int iNumParams)
 	}
 	
 	CSGOItems_LoopGloves(iGlovesNum) {
-		if (g_bIsNativeSkin[iSkinNum][iGlovesNum]) {
+		if (g_bIsNativeSkin[ITEMTYPE_GLOVES][iSkinNum][iGlovesNum]) {
 			return iGlovesNum;
 		}
 	}

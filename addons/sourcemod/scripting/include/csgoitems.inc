@@ -89,6 +89,9 @@ public void __pl_csgoitems_SetNTVOptional() {
 #define SEQUENCE_BOWIE_HEAVY_BACKSTAB1 10
 #define SEQUENCE_BOWIE_LOOKAT01 11
 
+#define ITEMTYPE_WEAPON 0
+#define ITEMTYPE_GLOVES 1
+
 native int CSGOItems_GetWeaponCount();
 native int CSGOItems_GetMusicKitCount();
 native int CSGOItems_GetSkinCount();
@@ -185,7 +188,7 @@ native int CSGOItems_GetSkinDefIndexBySkinNum(int iSkinNum);
 native bool CSGOItems_GetSkinDisplayNameByDefIndex(int iDefIndex, char[] szBuffer, int iLength);
 native bool CSGOItems_GetSkinDisplayNameBySkinNum(int iSkinNum, char[] szBuffer, int iLength);
 native bool CSGOItems_GetSkinVmtPathBySkinNum(int iSkinNum, char[] szBuffer, int iLength);
-native bool CSGOItems_IsNativeSkin(int iSkinNum, int iItemNum);
+native bool CSGOItems_IsNativeSkin(int iSkinNum, int iItemNum, int iItemType);
 native int CSGOItems_GetWeaponNumBySkinNum(int iSkinNum);
 
 // Gloves
