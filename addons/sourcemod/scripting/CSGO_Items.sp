@@ -239,6 +239,8 @@ CHANGELOG
 				- For example CSGOItems_IsNativeSkin(iSkinNum, iWeaponNum, ITEMTYPE_WEAPON) or CSGOItems_IsNativeSkin(iSkinNum, iGlovesNum, ITEMTYPE_GLOVES)
 			- Slight improvement to sync speed again.
 			- Replaced Format with FormatEx as its faster.
+		1.4.8.1 ~
+			- Disable hibernation during sync and automatically enable it afterwards (If it was enabled in the first place).
 			
 ****************************************************************************************************
 INCLUDES
@@ -258,7 +260,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.4.8"
+#define VERSION "1.4.8.1"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -312,6 +314,7 @@ Handle g_hOnPluginEnd = null;
 Handle g_hSwitchWeaponCall = null;
 Handle g_hOnWeaponGiven = null;
 ConVar g_hCvarSpraysEnabled = null;
+ConVar g_hCvarHibernation = null;
 
 /****************************************************************************************************
 BOOLS.
@@ -333,6 +336,7 @@ bool g_bPTAH = false;
 bool g_bSpawnItemFromDefIndex = false;
 bool g_bFollowGuidelines = false;
 bool g_bWeaponEquipped[MAXPLAYERS + 1][2049];
+bool g_bHibernation = false;
 
 /****************************************************************************************************
 STRINGS.
@@ -415,12 +419,16 @@ public void OnPluginStart()
 	#endif
 	
 	AddNormalSoundHook(OnNormalSoundPlayed);
+	FindAndHookHibernation();
 }
 
 public void OnCvarChanged(ConVar hConVar, const char[] szOldValue, const char[] szNewValue)
 {
 	if (hConVar == g_hCvarSpraysEnabled) {
 		g_bSpraysEnabled = view_as<bool>(StringToInt(szNewValue));
+	} else if (hConVar == g_hCvarHibernation && view_as<bool>(StringToInt(szNewValue)) && !g_bItemsSynced) {
+		g_hCvarHibernation.BoolValue = false;
+		g_bHibernation = true;
 	}
 }
 
@@ -799,6 +807,10 @@ public void GiveNamedItemPost(int iClient, const char[] sClassname, const CEconI
 	}
 }
 
+public void OnGameFrame() {
+	FindAndHookHibernation();
+}
+
 public bool RetrieveLanguage()
 {
 	if (!g_bSteamWorksLoaded) {
@@ -1031,6 +1043,10 @@ public Action Timer_SyncSchema(Handle hTimer)
 	
 	int iEnd = GetTime();
 	LogMessage("Item data synced in %d seconds.", iEnd - iStart);
+	
+	if (g_hCvarHibernation != null && g_bHibernation) {
+		g_hCvarHibernation.BoolValue = true;
+	}
 	
 	return Plugin_Stop;
 }
@@ -1292,7 +1308,7 @@ public void SyncItemData()
 		g_bSkinNumGloveApplicable[g_iPaintCount] = StrContains(g_szPaintInfo[g_iPaintCount][VMTPATH], "paints_gloves", false) > -1;
 		
 		CSGOItems_LoopWeapons(iWeaponNum) {
-			if(g_bIsNativeSkin[ITEMTYPE_WEAPON][g_iPaintCount][iWeaponNum]) {
+			if (g_bIsNativeSkin[ITEMTYPE_WEAPON][g_iPaintCount][iWeaponNum]) {
 				break;
 			}
 			
@@ -1315,14 +1331,14 @@ public void SyncItemData()
 				
 				g_bIsNativeSkin[ITEMTYPE_WEAPON][g_iPaintCount][iWeaponNum] = StrEqual(g_szCDNPhrases[i], szBuffer, false);
 				
-				if(g_bIsNativeSkin[ITEMTYPE_WEAPON][g_iPaintCount][iWeaponNum]) {
+				if (g_bIsNativeSkin[ITEMTYPE_WEAPON][g_iPaintCount][iWeaponNum]) {
 					break;
 				}
 			}
 		}
 		
 		CSGOItems_LoopGloves(iGlovesNum) {
-			if(g_bIsNativeSkin[ITEMTYPE_GLOVES][g_iPaintCount][iGlovesNum]) {
+			if (g_bIsNativeSkin[ITEMTYPE_GLOVES][g_iPaintCount][iGlovesNum]) {
 				break;
 			}
 			
@@ -1335,7 +1351,7 @@ public void SyncItemData()
 				
 				g_bIsNativeSkin[ITEMTYPE_GLOVES][g_iPaintCount][iGlovesNum] = StrEqual(g_szCDNPhrases[i], szBuffer, false);
 				
-				if(g_bIsNativeSkin[ITEMTYPE_GLOVES][g_iPaintCount][iGlovesNum]) {
+				if (g_bIsNativeSkin[ITEMTYPE_GLOVES][g_iPaintCount][iGlovesNum]) {
 					break;
 				}
 			}
@@ -1560,6 +1576,8 @@ public void OnConfigsExecuted()
 	}
 	
 	delete fFile;
+	
+	FindAndHookHibernation();
 }
 
 public void OnMapStart()
@@ -1579,6 +1597,29 @@ public void OnMapStart()
 			
 			SafePrecacheDecal(szBuffer, true);
 			PrecacheMaterial(szBuffer);
+		}
+	}
+}
+
+public void FindAndHookHibernation()
+{
+	if (g_hCvarHibernation == null) {
+		g_hCvarHibernation = FindConVar("sv_hibernate_when_empty");
+		
+		if (g_hCvarHibernation != null) {
+			g_hCvarHibernation.AddChangeHook(OnCvarChanged);
+		}
+	}
+	
+	if (g_hCvarHibernation == null) {
+		return;
+	}
+	
+	if (g_hCvarHibernation.BoolValue) {
+		g_bHibernation = true;
+		
+		if (!g_bItemsSynced) {
+			g_hCvarHibernation.BoolValue = false;
 		}
 	}
 }
@@ -2919,7 +2960,7 @@ public int Native_IsNativeSkin(Handle hPlugin, int iNumParams)
 	int iItemNum = GetNativeCell(2);
 	int iItemType = GetNativeCell(3);
 	
-	if(iItemType < 0 || iItemType > 1) {
+	if (iItemType < 0 || iItemType > 1) {
 		return false;
 	}
 	
