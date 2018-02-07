@@ -807,12 +807,10 @@ public void GiveNamedItemPost(int iClient, const char[] sClassname, const CEconI
 	}
 }
 
-public void OnGameFrame() {
-	FindAndHookHibernation();
-}
-
 public bool RetrieveLanguage()
 {
+	FindAndHookHibernation();
+	
 	if (!g_bSteamWorksLoaded) {
 		return false;
 	}
