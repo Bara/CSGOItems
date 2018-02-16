@@ -241,6 +241,8 @@ CHANGELOG
 			- Replaced Format with FormatEx as its faster.
 		1.4.8.1 ~
 			- Disable hibernation during sync and automatically enable it afterwards (If it was enabled in the first place).
+		1.4.9 ~
+			- Fixed sync issues.
 			
 ****************************************************************************************************
 INCLUDES
@@ -260,7 +262,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.4.8.1"
+#define VERSION "1.4.9"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -865,11 +867,7 @@ public Action Timer_Wait1(Handle hTimer)
 public int Language_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything)
 {
 	if (bRequestSuccessful && eStatusCode == k_EHTTPStatusCode200OK) {
-		if (FileExists("resource/csgo_english_utf8.txt")) {
-			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "resource/csgo_english_utf8_new.txt");
-		} else {
-			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "resource/csgo_english_utf8.txt");
-		}
+		SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "resource/csgo_english_utf8.txt");
 	}
 	
 	LogMessage("UTF-8 language file successfully retrieved.");
@@ -885,22 +883,15 @@ public Action Timer_SyncLanguage(Handle hTimer)
 	}
 	
 	Handle hLanguageFile = OpenFile("resource/csgo_english_utf8.txt", "r");
-	Handle hLanguageFileNew = OpenFile("resource/csgo_english_utf8_new.txt", "r");
 	
-	if (hLanguageFileNew != null && ReadFileString(hLanguageFileNew, g_szLangPhrases, 2198296) && StrContains(g_szLangPhrases, "// GAMEUI_ENGLISH.txt") > -1) {
-		DeleteFile("resource/csgo_english_utf8.txt");
-		RenameFile("resource/csgo_english_utf8.txt", "resource/csgo_english_utf8_new.txt");
-	}
-	
-	else if (hLanguageFile != null && ReadFileString(hLanguageFile, g_szLangPhrases, 2198296) && StrContains(g_szLangPhrases, "// GAMEUI_ENGLISH.txt") > -1) {
-		DeleteFile("resource/csgo_english_utf8_new.txt");
+	if (hLanguageFile != null) {
+		ReadFileString(hLanguageFile, g_szLangPhrases, 2198296);
 	}
 	else {
 		g_bLanguageDownloading = false;
 		delete hLanguageFile;
-		delete hLanguageFileNew;
 		
-		DeleteFile("resource/csgo_english_utf8.txt"); DeleteFile("resource/csgo_english_utf8_new.txt");
+		DeleteFile("resource/csgo_english_utf8.txt");
 		
 		if (g_iLanguageDownloadAttempts < 10) {
 			RetrieveLanguage();
@@ -913,7 +904,6 @@ public Action Timer_SyncLanguage(Handle hTimer)
 	}
 	
 	delete hLanguageFile;
-	delete hLanguageFileNew;
 	
 	g_bLanguageDownloading = false;
 	g_iLanguageDownloadAttempts = 0;
@@ -980,11 +970,7 @@ public Action Timer_Wait2(Handle hTimer)
 public int Schema_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything)
 {
 	if (bRequestSuccessful && eStatusCode == k_EHTTPStatusCode200OK) {
-		if (FileExists("scripts/items/items_game_fixed.txt")) {
-			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "scripts/items/items_game_fixed_new.txt");
-		} else {
-			SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "scripts/items/items_game_fixed.txt");
-		}
+		SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "scripts/items/items_game_fixed.txt");
 	}
 	
 	LogMessage("Item Schema successfully retrieved.");
@@ -1000,22 +986,15 @@ public Action Timer_SyncSchema(Handle hTimer)
 	}
 	
 	Handle hSchemaFile = OpenFile("scripts/items/items_game_fixed.txt", "r");
-	Handle hSchemaFileNew = OpenFile("scripts/items/items_game_fixed_new.txt", "r");
 	
-	if (hSchemaFileNew != null && ReadFileString(hSchemaFileNew, g_szSchemaPhrases, 2198296) && StrContains(g_szSchemaPhrases, "\"items_game\"") > -1) {
-		DeleteFile("scripts/items/items_game_fixed.txt");
-		RenameFile("scripts/items/items_game_fixed.txt", "scripts/items/items_game_fixed_new.txt");
-	}
-	
-	else if (hSchemaFile != null && ReadFileString(hSchemaFile, g_szSchemaPhrases, 2198296) && StrContains(g_szSchemaPhrases, "\"items_game\"") > -1) {
-		DeleteFile("scripts/items/items_game_fixed_new.txt");
+	if (hSchemaFile != null) {
+		ReadFileString(hSchemaFile, g_szSchemaPhrases, 2198296);
 	} else {
 		g_bItemsSyncing = false;
 		
 		delete hSchemaFile;
-		delete hSchemaFileNew;
 		
-		DeleteFile("scripts/items/items_game_fixed.txt"); DeleteFile("scripts/items/items_game_fixed_new.txt");
+		DeleteFile("scripts/items/items_game_fixed.txt"); 
 		
 		if (g_iSchemaDownloadAttempts < 10) {
 			RetrieveItemSchema();
@@ -1028,7 +1007,6 @@ public Action Timer_SyncSchema(Handle hTimer)
 	}
 	
 	delete hSchemaFile;
-	delete hSchemaFileNew;
 	
 	g_bSchemaDownloading = false;
 	g_iSchemaDownloadAttempts = 0;
