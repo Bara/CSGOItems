@@ -243,6 +243,15 @@ CHANGELOG
 			- Disable hibernation during sync and automatically enable it afterwards (If it was enabled in the first place).
 		1.4.9 ~
 			- Fixed sync issues.
+		1.5.0 ~
+			- Completely reworked item iteration and implemented the Prefaberator, this will recursively scan inner prefabs dynamically for missed keys, less guess work, more dynamicness!
+			- Fixed Buffer sizes cutting display names short.
+			- Made the plugin safety checks a less strict.
+			- Fixed CSGOItems_RemoveAllWeapons - I had a few complaints and can confirm it was broken, but it should function normally now.
+			- Fixed view sequence resetting when giving a weapon, specifically the same one in cases such as CSGOItems_RespawnWeapon.
+			- Added future support for quality / rarity.
+			- Removed hardcoded guess work for prefabs which were previousally missed, Prefaberator will pick those up now.
+			- Cleaned up some code.
 			
 ****************************************************************************************************
 INCLUDES
@@ -262,7 +271,7 @@ INCLUDES
 /****************************************************************************************************
 DEFINES
 *****************************************************************************************************/
-#define VERSION "1.4.9"
+#define VERSION "1.5.0"
 
 #define 	DEFINDEX 		0
 #define 	CLASSNAME 		1
@@ -286,6 +295,7 @@ DEFINES
 #define     CYCLETIME		18
 #define     VMTPATH			19
 #define     VTFPATH			20
+#define     QUALITY			21
 
 #define 	LANGURL         "http://api.fragdeluxe.com/itemdata/csgo_language.php"
 #define 	SCHEMAURL         "http://api.fragdeluxe.com/itemdata/csgo_schema.php"
@@ -403,8 +413,8 @@ public void OnPluginStart()
 	delete hConfig;
 	
 	HookEvent("player_death", Event_PlayerDeath);
-	HookEvent("round_poststart", OnRoundStart, EventHookMode_Post);
-	HookEvent("round_end", OnRoundEnd, EventHookMode_Pre);
+	HookEvent("round_poststart", OnRoundStart);
+	HookEvent("cs_pre_restart", OnRoundEnd);
 	
 	AutoExecConfig_SetFile("plugin.csgoitems");
 	g_hCvarSpraysEnabled = AutoExecConfig_CreateConVar("csgoitems_spraysenabled", "0", "Should CSGO Items add support for sprays / make clients download them?");
@@ -994,7 +1004,7 @@ public Action Timer_SyncSchema(Handle hTimer)
 		
 		delete hSchemaFile;
 		
-		DeleteFile("scripts/items/items_game_fixed.txt"); 
+		DeleteFile("scripts/items/items_game_fixed.txt");
 		
 		if (g_iSchemaDownloadAttempts < 10) {
 			RetrieveItemSchema();
@@ -1057,7 +1067,6 @@ public void SyncItemData()
 	delete hFile;
 	
 	g_bItemsSyncing = true;
-	
 	g_iPaintCount = 0;
 	g_iWeaponCount = 0;
 	g_iMusicKitCount = 0;
@@ -1080,177 +1089,34 @@ public void SyncItemData()
 		SetFailState("Unable to find Item keyvalues");
 	}
 	
-	char szBuffer[128]; char szBuffer2[48]; char szBuffer3[48][48];
+	char szBuffer[128]; char szBuffer2[128]; char szBuffer3[96][96];
 	int iDefIndex = 0;
 	
 	do {
-		KvGetString(g_hItemsKv, "name", szBuffer2, 48);
-		KvGetString(g_hItemsKv, "prefab", szBuffer, 48);
+		KvGetString(g_hItemsKv, "name", szBuffer2, sizeof(szBuffer2));
+		KvGetString(g_hItemsKv, "prefab", szBuffer, sizeof(szBuffer));
 		
-		if (StrContains(szBuffer, "hands_paintable") < 0 && StrContains(szBuffer, "hands") < 0) {
-			if (!IsValidWeaponClassName(szBuffer2)) {
-				continue;
-			}
-			
-			KvGetSectionName(g_hItemsKv, g_szWeaponInfo[g_iWeaponCount][DEFINDEX], 48);
-			strcopy(g_szWeaponInfo[g_iWeaponCount][CLASSNAME], 48, szBuffer2);
-			
-			if (StrEqual(g_szWeaponInfo[g_iWeaponCount][CLASSNAME], "weapon_c4", false)) {
-				g_szWeaponInfo[g_iWeaponCount][TEAM] = "2";
-			}
-			
-			if (StrContains(szBuffer, "melee") > -1) {
-				g_bIsDefIndexKnife[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])] = true;
-				
-				if (StrContains(szBuffer, "unusual") > -1) {
-					g_bIsDefIndexSkinnable[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])] = true;
-					g_szWeaponInfo[g_iWeaponCount][SLOT] = "melee";
-				}
-			}
-			
-			int iKillAward = -1;
-			bool bKillAwardFound = GetWeaponKillAward(g_szWeaponInfo[g_iWeaponCount][CLASSNAME], g_szWeaponInfo[g_iWeaponCount][KILLAWARD], 48);
-			
-			if (bKillAwardFound) {
-				iKillAward = StringToInt(g_szWeaponInfo[g_iWeaponCount][KILLAWARD]);
-			}
-			
-			float fSpread = 0.0;
-			bool bSpreadFound = GetWeaponSpread(g_szWeaponInfo[g_iWeaponCount][CLASSNAME], g_szWeaponInfo[g_iWeaponCount][SPREAD], 48);
-			
-			if (bSpreadFound) {
-				fSpread = StringToFloat(g_szWeaponInfo[g_iWeaponCount][SPREAD]);
-			}
-			
-			float fCycleTime = 0.0;
-			bool bCycleTimeFound = GetWeaponCycleTime(g_szWeaponInfo[g_iWeaponCount][CLASSNAME], g_szWeaponInfo[g_iWeaponCount][CYCLETIME], 48);
-			
-			if (bCycleTimeFound) {
-				fCycleTime = StringToFloat(g_szWeaponInfo[g_iWeaponCount][CYCLETIME]);
-			}
-			
-			if (IsSpecialPrefab(szBuffer)) {
-				KvGetString(g_hItemsKv, "item_name", szBuffer, 48);
-				KvGetString(g_hItemsKv, "model_player", g_szWeaponInfo[g_iWeaponCount][VIEWMODEL], 48);
-				KvGetString(g_hItemsKv, "model_world", g_szWeaponInfo[g_iWeaponCount][WORLDMODEL], 48);
-				
-			} else {
-				KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv);
-				
-				if (KvJumpToKey(g_hItemsKv, "prefabs")) {
-					
-					if (KvJumpToKey(g_hItemsKv, szBuffer)) {
-						KvGetString(g_hItemsKv, "prefab", g_szWeaponInfo[g_iWeaponCount][TYPE], 48);
-						KvGetString(g_hItemsKv, "item_name", szBuffer, 48);
-						KvGetString(g_hItemsKv, "model_player", g_szWeaponInfo[g_iWeaponCount][VIEWMODEL], 48);
-						KvGetString(g_hItemsKv, "model_world", g_szWeaponInfo[g_iWeaponCount][WORLDMODEL], 48);
-					}
-					
-					if (KvJumpToKey(g_hItemsKv, "used_by_classes")) {
-						bool bTerrorist = KvGetNum(g_hItemsKv, "terrorists") == 1;
-						bool bCounterTerrorist = KvGetNum(g_hItemsKv, "counter-terrorists") == 1;
-						bool bBothTeams = bTerrorist && bCounterTerrorist;
-						
-						if (bBothTeams) {
-							g_szWeaponInfo[g_iWeaponCount][TEAM] = "0";
-						}
-						
-						else if (bTerrorist) {
-							g_szWeaponInfo[g_iWeaponCount][TEAM] = "2";
-						}
-						
-						else if (bCounterTerrorist) {
-							g_szWeaponInfo[g_iWeaponCount][TEAM] = "3";
-						}
-						
-						KvGoBack(g_hItemsKv);
-					} else {
-						g_szWeaponInfo[g_iWeaponCount][TEAM] = "0";
-					}
-					
-					if (KvJumpToKey(g_hItemsKv, "attributes")) {
-						int iClipAmmo = KvGetNum(g_hItemsKv, "primary clip size", -1);
-						int iReserveAmmo = KvGetNum(g_hItemsKv, "primary reserve ammo max", -1);
-						
-						if (iKillAward < 0 || !bKillAwardFound) {
-							iKillAward = KvGetNum(g_hItemsKv, "kill award", -1);
-						}
-						
-						if (fSpread <= 0.0 || !bSpreadFound) {
-							fSpread = KvGetFloat(g_hItemsKv, "spread", 0.0);
-						}
-						
-						if (fCycleTime <= 0.0 || !bCycleTimeFound) {
-							fCycleTime = KvGetFloat(g_hItemsKv, "cycletime", 0.0);
-						}
-						
-						if (iClipAmmo > 0) {
-							IntToString(iClipAmmo, g_szWeaponInfo[g_iWeaponCount][CLIPAMMO], 48);
-						} else {
-							GetWeaponClip(g_szWeaponInfo[g_iWeaponCount][CLASSNAME], g_szWeaponInfo[g_iWeaponCount][CLIPAMMO], 48);
-						}
-						
-						IntToString(iReserveAmmo, g_szWeaponInfo[g_iWeaponCount][RESERVEAMMO], 48);
-						KvGoBack(g_hItemsKv);
-					}
-					
-					KvGoBack(g_hItemsKv); KvGoBack(g_hItemsKv);
-					
-					if (KvJumpToKey(g_hItemsKv, "items")) {
-						KvJumpToKey(g_hItemsKv, g_szWeaponInfo[g_iWeaponCount][DEFINDEX]);
-					}
-				}
-			}
-			
-			if (iKillAward <= 0) {
-				IntToString(300, g_szWeaponInfo[g_iWeaponCount][KILLAWARD], 48);
-			} else {
-				IntToString(iKillAward, g_szWeaponInfo[g_iWeaponCount][KILLAWARD], 48);
-			}
-			
-			if (fSpread <= 0.0) {
-				FloatToString(0.0, g_szWeaponInfo[g_iWeaponCount][SPREAD], 48);
-			} else {
-				FloatToString(fSpread, g_szWeaponInfo[g_iWeaponCount][SPREAD], 48);
-			}
-			
-			if (fCycleTime <= 0.0) {
-				FloatToString(0.0, g_szWeaponInfo[g_iWeaponCount][CYCLETIME], 48);
-			} else {
-				FloatToString(fCycleTime, g_szWeaponInfo[g_iWeaponCount][CYCLETIME], 48);
-			}
-			
-			if (StrEqual(g_szWeaponInfo[g_iWeaponCount][CLIPAMMO], "", false)) {
-				strcopy(g_szWeaponInfo[g_iWeaponCount][CLIPAMMO], 4, "-1");
-			}
-			
-			if (StrEqual(g_szWeaponInfo[g_iWeaponCount][RESERVEAMMO], "", false)) {
-				strcopy(g_szWeaponInfo[g_iWeaponCount][RESERVEAMMO], 4, "-1");
-			}
-			
-			GetItemName(szBuffer, g_szWeaponInfo[g_iWeaponCount][DISPLAYNAME], 48);
-			KvGetString(g_hItemsKv, "item_sub_position", szBuffer, 48);
-			
-			if (StrContains(szBuffer, "grenade") < 0 && StrContains(szBuffer, "equipment") < 0 && !StrEqual(szBuffer, "", false) && StrContains(szBuffer, "melee") < 0) {
-				g_bIsDefIndexSkinnable[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])] = true;
-			}
-			
-			if (!StrEqual(szBuffer, "", false)) {
-				strcopy(g_szWeaponInfo[g_iWeaponCount][SLOT], 48, szBuffer);
-			}
-			
-			g_iWeaponCount++;
-		} else {
-			KvGetSectionName(g_hItemsKv, g_szGlovesInfo[g_iGlovesCount][DEFINDEX], 48);
-			strcopy(g_szGlovesInfo[g_iGlovesCount][CLASSNAME], 48, szBuffer2);
-			
-			KvGetString(g_hItemsKv, "item_name", szBuffer, 48);
-			GetItemName(szBuffer, g_szGlovesInfo[g_iGlovesCount][DISPLAYNAME], 48);
-			KvGetString(g_hItemsKv, "model_player", g_szGlovesInfo[g_iGlovesCount][VIEWMODEL], 96);
-			KvGetString(g_hItemsKv, "model_world", g_szGlovesInfo[g_iGlovesCount][WORLDMODEL], 96);
-			
-			g_iGlovesCount++;
+		bool bGloves = StrEqual(szBuffer, "hands", false) || StrEqual(szBuffer, "hands_paintable", false);
+		
+		if (!IsValidWeaponClassName(szBuffer2) && !bGloves) {
+			continue;
 		}
+		
+		int iItemType = bGloves ? ITEMTYPE_GLOVES : ITEMTYPE_WEAPON;
+		
+		KvGetSectionName(g_hItemsKv, iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][DEFINDEX] : g_szGlovesInfo[g_iGlovesCount][DEFINDEX], 96);
+		strcopy(iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][CLASSNAME] : g_szGlovesInfo[g_iGlovesCount][CLASSNAME], sizeof(szBuffer2), szBuffer2);
+		
+		char szItemName[96]; Prefaberator(iItemType, -1, -1, -1, -1.0, -1.0, szItemName);
+		
+		GetItemName(szItemName, iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][DISPLAYNAME] : g_szGlovesInfo[g_iGlovesCount][DISPLAYNAME], 96);
+		
+		if (bGloves) {
+			g_iGlovesCount++;
+		} else {
+			g_iWeaponCount++;
+		}
+		
 	} while (KvGotoNextKey(g_hItemsKv)); KvRewind(g_hItemsKv);
 	
 	if (!KvJumpToKey(g_hItemsKv, "paint_kits") || !KvGotoFirstSubKey(g_hItemsKv, false)) {
@@ -1260,23 +1126,24 @@ public void SyncItemData()
 	}
 	
 	do {
-		KvGetSectionName(g_hItemsKv, szBuffer, 48); int iSkinDefIndex = StringToInt(szBuffer);
+		KvGetSectionName(g_hItemsKv, szBuffer, sizeof(szBuffer)); int iSkinDefIndex = StringToInt(szBuffer);
 		
 		if (iSkinDefIndex == 9001) {
-			strcopy(szBuffer, 48, "1");
+			strcopy(szBuffer, sizeof(szBuffer), "1");
 			iSkinDefIndex = 1;
 		}
 		
-		strcopy(g_szPaintInfo[g_iPaintCount][DEFINDEX], 48, szBuffer);
+		strcopy(g_szPaintInfo[g_iPaintCount][DEFINDEX], sizeof(szBuffer), szBuffer);
 		
 		if (iSkinDefIndex == 0) {
-			strcopy(g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 48, "Default");
+			strcopy(g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 96, "Default");
 		} else if (iSkinDefIndex == 1) {
-			strcopy(g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 48, "Vanilla");
+			strcopy(g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 96, "Vanilla");
 		} else {
-			KvGetString(g_hItemsKv, "name", g_szPaintInfo[g_iPaintCount][ITEMNAME], 48);
-			KvGetString(g_hItemsKv, "description_tag", szBuffer, 48);
-			GetItemName(szBuffer, g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 48);
+			KvGetString(g_hItemsKv, "name", g_szPaintInfo[g_iPaintCount][ITEMNAME], 96);
+			KvGetString(g_hItemsKv, "description_tag", szBuffer, sizeof(szBuffer));
+			
+			GetItemName(szBuffer, g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 96);
 		}
 		
 		KvGetString(g_hItemsKv, "vmt_path", g_szPaintInfo[g_iPaintCount][VMTPATH], 96);
@@ -1288,7 +1155,7 @@ public void SyncItemData()
 				break;
 			}
 			
-			if (!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, 48)) {
+			if (!GetWeaponClassNameByWeaponNum(iWeaponNum, szBuffer2, sizeof(szBuffer2))) {
 				continue;
 			}
 			
@@ -1348,16 +1215,16 @@ public void SyncItemData()
 	}
 	
 	do {
-		KvGetSectionName(g_hItemsKv, szBuffer, 48);
+		KvGetSectionName(g_hItemsKv, szBuffer, sizeof(szBuffer));
 		int iMusicDefIndex = StringToInt(szBuffer);
 		
 		if (iMusicDefIndex < 3) {
 			continue;
 		}
 		
-		strcopy(g_szMusicKitInfo[g_iMusicKitCount][DEFINDEX], 48, szBuffer);
-		KvGetString(g_hItemsKv, "loc_name", szBuffer2, 48);
-		GetItemName(szBuffer2, g_szMusicKitInfo[g_iMusicKitCount][DISPLAYNAME], 48);
+		strcopy(g_szMusicKitInfo[g_iMusicKitCount][DEFINDEX], 96, szBuffer);
+		KvGetString(g_hItemsKv, "loc_name", szBuffer2, sizeof(szBuffer2));
+		GetItemName(szBuffer2, g_szMusicKitInfo[g_iMusicKitCount][DISPLAYNAME], 96);
 		
 		g_iMusicKitCount++;
 	} while (KvGotoNextKey(g_hItemsKv)); KvRewind(g_hItemsKv);
@@ -1369,14 +1236,14 @@ public void SyncItemData()
 	}
 	
 	do {
-		KvGetString(g_hItemsKv, "name", g_szItemSetInfo[g_iItemSetCount][CLASSNAME], 48);
-		GetItemName(g_szItemSetInfo[g_iItemSetCount][CLASSNAME], g_szItemSetInfo[g_iItemSetCount][DISPLAYNAME], 48);
+		KvGetString(g_hItemsKv, "name", g_szItemSetInfo[g_iItemSetCount][CLASSNAME], 96);
+		GetItemName(g_szItemSetInfo[g_iItemSetCount][CLASSNAME], g_szItemSetInfo[g_iItemSetCount][DISPLAYNAME], 96);
 		
 		if (KvJumpToKey(g_hItemsKv, "items")) {
 			if (KvGotoFirstSubKey(g_hItemsKv, false)) {
 				do {
-					KvGetSectionName(g_hItemsKv, szBuffer, 48);
-					ExplodeString(szBuffer, "]", szBuffer3, 48, 48); ReplaceString(szBuffer3[0], 48, "[", ""); ReplaceString(szBuffer3[1], 48, "]", "");
+					KvGetSectionName(g_hItemsKv, szBuffer, sizeof(szBuffer));
+					ExplodeString(szBuffer, "]", szBuffer3, 96, 96); ReplaceString(szBuffer3[0], 96, "[", ""); ReplaceString(szBuffer3[1], 96, "]", "");
 					
 					CSGOItems_LoopSkins(iSkinNum) {
 						if (StrEqual(szBuffer3[0], g_szPaintInfo[iSkinNum][ITEMNAME])) {
@@ -1399,26 +1266,26 @@ public void SyncItemData()
 	}
 	
 	do {
-		KvGetString(g_hItemsKv, "name", szBuffer, 48);
+		KvGetString(g_hItemsKv, "name", szBuffer, sizeof(szBuffer));
 		
 		if (StrContains(szBuffer, "spray", false) < 0) {
 			continue;
 		}
 		
-		KvGetString(g_hItemsKv, "sticker_material", szBuffer, 48);
+		KvGetString(g_hItemsKv, "sticker_material", szBuffer, sizeof(szBuffer));
 		
 		FormatEx(g_szSprayInfo[g_iSprayCount][VTFPATH], PLATFORM_MAX_PATH, "decals/sprays/%s.vtf", szBuffer);
 		
-		KvGetString(g_hItemsKv, "item_name", szBuffer2, 48);
+		KvGetString(g_hItemsKv, "item_name", szBuffer2, sizeof(szBuffer2));
 		
 		if (StrEqual(szBuffer2, "#StickerKit_comm01_rekt", false)) {
-			strcopy(g_szSprayInfo[g_iSprayCount][DISPLAYNAME], 48, "Rekt");
+			strcopy(g_szSprayInfo[g_iSprayCount][DISPLAYNAME], 96, "Rekt");
 		} else {
-			GetItemName(szBuffer2, g_szSprayInfo[g_iSprayCount][DISPLAYNAME], 48);
+			GetItemName(szBuffer2, g_szSprayInfo[g_iSprayCount][DISPLAYNAME], 96);
 		}
 		
-		KvGetSectionName(g_hItemsKv, szBuffer2, 48);
-		strcopy(g_szSprayInfo[g_iSprayCount][DEFINDEX], 48, szBuffer2);
+		KvGetSectionName(g_hItemsKv, szBuffer2, sizeof(szBuffer2));
+		strcopy(g_szSprayInfo[g_iSprayCount][DEFINDEX], 96, szBuffer2);
 		
 		char szExplode[2][64]; ExplodeString(szBuffer, "/", szExplode, 2, 64);
 		
@@ -1436,7 +1303,7 @@ public void SyncItemData()
 	
 	do {
 		CSGOItems_LoopSkins(iSkinNum) {
-			KvGetString(g_hItemsKv, g_szPaintInfo[iSkinNum][ITEMNAME], g_szPaintInfo[iSkinNum][RARITY], 128);
+			KvGetString(g_hItemsKv, g_szPaintInfo[iSkinNum][ITEMNAME], g_szPaintInfo[iSkinNum][RARITY], 96);
 		}
 	} while (KvGotoNextKey(g_hItemsKv)); delete g_hItemsKv;
 	
@@ -1445,6 +1312,142 @@ public void SyncItemData()
 	
 	g_bItemsSynced = true;
 	g_bItemsSyncing = false;
+}
+
+stock void Prefaberator(int iItemType, int iClipAmmo, int iReserveAmmo, int iKillAward, float fSpread, float fCycleTime, char szItemName[96])
+{
+	char szPrefab[96]; KvGetString(g_hItemsKv, "prefab", szPrefab, sizeof(szPrefab));
+	
+	if (iItemType == ITEMTYPE_GLOVES && StrEqual(g_szGlovesInfo[g_iGlovesCount][TYPE], "", false)) {
+		strcopy(g_szGlovesInfo[g_iGlovesCount][TYPE], 96, szPrefab);
+	} else if (iItemType == ITEMTYPE_WEAPON && StrEqual(g_szWeaponInfo[g_iWeaponCount][TYPE], "", false)) {
+		strcopy(g_szWeaponInfo[g_iWeaponCount][TYPE], 96, szPrefab);
+	}
+	
+	if (StrEqual(szItemName, "", false)) {
+		KvGetString(g_hItemsKv, "item_name", szItemName, sizeof(szItemName));
+	}
+	
+	if (iItemType == ITEMTYPE_GLOVES && StrEqual(g_szGlovesInfo[g_iGlovesCount][VIEWMODEL], "", false)) {
+		KvGetString(g_hItemsKv, "model_player", g_szGlovesInfo[g_iGlovesCount][VIEWMODEL], PLATFORM_MAX_PATH);
+	} else if (iItemType == ITEMTYPE_WEAPON && StrEqual(g_szWeaponInfo[g_iWeaponCount][VIEWMODEL], "", false)) {
+		KvGetString(g_hItemsKv, "model_player", g_szWeaponInfo[g_iWeaponCount][VIEWMODEL], PLATFORM_MAX_PATH);
+	}
+	
+	if (iItemType == ITEMTYPE_GLOVES && StrEqual(g_szGlovesInfo[g_iGlovesCount][WORLDMODEL], "", false)) {
+		KvGetString(g_hItemsKv, "model_world", g_szGlovesInfo[g_iGlovesCount][WORLDMODEL], PLATFORM_MAX_PATH);
+	} else if (iItemType == ITEMTYPE_WEAPON && StrEqual(g_szWeaponInfo[g_iWeaponCount][WORLDMODEL], "", false)) {
+		KvGetString(g_hItemsKv, "model_world", g_szWeaponInfo[g_iWeaponCount][WORLDMODEL], PLATFORM_MAX_PATH);
+	}
+	
+	if (iItemType == ITEMTYPE_GLOVES && StrEqual(g_szGlovesInfo[g_iGlovesCount][RARITY], "", false)) {
+		KvGetString(g_hItemsKv, "item_rarity", g_szGlovesInfo[g_iGlovesCount][RARITY], PLATFORM_MAX_PATH);
+	} else if (iItemType == ITEMTYPE_WEAPON && StrEqual(g_szWeaponInfo[g_iWeaponCount][RARITY], "", false)) {
+		KvGetString(g_hItemsKv, "item_rarity", g_szWeaponInfo[g_iWeaponCount][RARITY], PLATFORM_MAX_PATH);
+	}
+	
+	if (iItemType == ITEMTYPE_GLOVES && StrEqual(g_szGlovesInfo[g_iGlovesCount][QUALITY], "", false)) {
+		KvGetString(g_hItemsKv, "item_quality", g_szGlovesInfo[g_iGlovesCount][QUALITY], PLATFORM_MAX_PATH);
+	} else if (iItemType == ITEMTYPE_WEAPON && StrEqual(g_szWeaponInfo[g_iWeaponCount][QUALITY], "", false)) {
+		KvGetString(g_hItemsKv, "item_quality", g_szWeaponInfo[g_iWeaponCount][QUALITY], PLATFORM_MAX_PATH);
+	}
+	
+	if (iItemType == ITEMTYPE_GLOVES && StrEqual(g_szGlovesInfo[g_iGlovesCount][SLOT], "", false)) {
+		KvGetString(g_hItemsKv, "item_slot", g_szGlovesInfo[g_iGlovesCount][SLOT], PLATFORM_MAX_PATH);
+	} else if (iItemType == ITEMTYPE_WEAPON && StrEqual(g_szWeaponInfo[g_iWeaponCount][SLOT], "", false)) {
+		KvGetString(g_hItemsKv, "item_slot", g_szWeaponInfo[g_iWeaponCount][SLOT], PLATFORM_MAX_PATH);
+	}
+	
+	if (iItemType == ITEMTYPE_WEAPON && !g_bIsDefIndexSkinnable[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])] && KvJumpToKey(g_hItemsKv, "capabilities")) {
+		g_bIsDefIndexSkinnable[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])] = KvGetBool(g_hItemsKv, "paintable");
+		
+		KvGoBack(g_hItemsKv);
+	}
+	
+	if (KvJumpToKey(g_hItemsKv, "used_by_classes")) {
+		if ((iItemType == ITEMTYPE_GLOVES && StrEqual(g_szGlovesInfo[g_iGlovesCount][TEAM], "", false)) || (iItemType == ITEMTYPE_WEAPON && StrEqual(g_szWeaponInfo[g_iWeaponCount][TEAM], "", false))) {
+			bool bTerrorist = KvGetBool(g_hItemsKv, "terrorists");
+			bool bCounterTerrorist = KvGetBool(g_hItemsKv, "counter-terrorists");
+			bool bBothTeams = bTerrorist && bCounterTerrorist;
+			
+			if (bBothTeams) {
+				if (iItemType == ITEMTYPE_GLOVES) {
+					g_szGlovesInfo[g_iGlovesCount][TEAM] = "0";
+				} else if (iItemType == ITEMTYPE_WEAPON) {
+					g_szWeaponInfo[g_iWeaponCount][TEAM] = "0";
+				}
+			}
+			
+			else if (bTerrorist) {
+				if (iItemType == ITEMTYPE_GLOVES) {
+					g_szGlovesInfo[g_iGlovesCount][TEAM] = "2";
+				} else if (iItemType == ITEMTYPE_WEAPON) {
+					g_szWeaponInfo[g_iWeaponCount][TEAM] = "2";
+				}
+			}
+			
+			else if (bCounterTerrorist) {
+				if (iItemType == ITEMTYPE_GLOVES) {
+					g_szGlovesInfo[g_iGlovesCount][TEAM] = "3";
+				} else if (iItemType == ITEMTYPE_WEAPON) {
+					g_szWeaponInfo[g_iWeaponCount][TEAM] = "3";
+				}
+			}
+		}
+		
+		KvGoBack(g_hItemsKv);
+	}
+	
+	if (iItemType == ITEMTYPE_WEAPON && KvJumpToKey(g_hItemsKv, "attributes")) {
+		if (iClipAmmo == -1) {
+			iClipAmmo = KvGetNum(g_hItemsKv, "primary clip size", -1);
+		}
+		
+		if (iReserveAmmo == -1) {
+			iReserveAmmo = KvGetNum(g_hItemsKv, "primary reserve ammo max", -1);
+		}
+		
+		if (iKillAward == -1) {
+			iKillAward = KvGetNum(g_hItemsKv, "kill award", -1);
+		}
+		
+		if (fSpread == -1.0) {
+			fSpread = KvGetFloat(g_hItemsKv, "spread", -1.0);
+		}
+		
+		if (fCycleTime == -1.0) {
+			fCycleTime = KvGetFloat(g_hItemsKv, "cycletime", -1.0);
+		}
+		
+		KvGoBack(g_hItemsKv);
+	}
+	
+	KvRewind(g_hItemsKv);
+	
+	if (StrEqual(szPrefab, "", false)) {
+		if (iItemType == ITEMTYPE_WEAPON) {
+			IntToString(iClipAmmo, g_szWeaponInfo[g_iWeaponCount][CLIPAMMO], 96);
+			IntToString(iReserveAmmo, g_szWeaponInfo[g_iWeaponCount][RESERVEAMMO], 96);
+			IntToString(iKillAward, g_szWeaponInfo[g_iWeaponCount][KILLAWARD], 96);
+			
+			FloatToString(fSpread, g_szWeaponInfo[g_iWeaponCount][SPREAD], 96);
+			FloatToString(fCycleTime, g_szWeaponInfo[g_iWeaponCount][CYCLETIME], 96);
+		}
+		
+		KvJumpToKey(g_hItemsKv, "items");
+		
+		if (iItemType == ITEMTYPE_WEAPON) {
+			KvJumpToKey(g_hItemsKv, g_szWeaponInfo[g_iWeaponCount][DEFINDEX]);
+		} else if (iItemType == ITEMTYPE_GLOVES) {
+			KvJumpToKey(g_hItemsKv, g_szGlovesInfo[g_iGlovesCount][DEFINDEX]);
+		}
+		
+	} else {
+		KvJumpToKey(g_hItemsKv, "prefabs");
+		KvJumpToKey(g_hItemsKv, szPrefab);
+		
+		Prefaberator(iItemType, iClipAmmo, iReserveAmmo, iKillAward, fSpread, fCycleTime, szItemName);
+	}
 }
 
 stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] szFile, const char[] szTexturePath)
@@ -1627,138 +1630,6 @@ stock void GetItemName(char[] szPhrase, char[] szBuffer, int iLength)
 	strcopy(szBuffer, iLen, g_szLangPhrases[iPos]);
 }
 
-stock void GetWeaponClip(char[] szClassName, char[] szReturn, int iLength)
-{
-	char szBuffer[128]; FormatEx(szBuffer, 64, "scripts/%s.txt", szClassName);
-	
-	Handle hFile = OpenFile(szBuffer, "r");
-	
-	if (hFile == null) {
-		strcopy(szReturn, iLength, "-1");
-		return;
-	}
-	
-	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-		if (StrContains(szBuffer, "clip_size", false) > -1 && StrContains(szBuffer, "default", false) < 0) {
-			ReplaceString(szBuffer, 128, "clip_size", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
-			TrimString(szBuffer); StripQuotes(szBuffer);
-			strcopy(szReturn, iLength, szBuffer);
-			break;
-		}
-	}
-	
-	if (StrEqual(szReturn, "", false) || StrEqual(szReturn, "0", false)) {
-		strcopy(szReturn, iLength, "-1");
-	}
-	
-	delete hFile;
-}
-
-stock bool GetWeaponKillAward(char[] szClassName, char[] szReturn, int iLength)
-{
-	char szBuffer[128];
-	
-	if (IsDefIndexKnife(GetWeaponDefIndexByClassName(szClassName))) {
-		FormatEx(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
-	} else {
-		FormatEx(szBuffer, 64, "scripts/%s.txt", szClassName);
-	}
-	
-	Handle hFile = OpenFile(szBuffer, "r");
-	
-	if (hFile == null) {
-		strcopy(szReturn, iLength, "-1");
-		return false;
-	}
-	
-	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-		if (StrContains(szBuffer, "KillAward", false) > -1 && StrContains(szBuffer, "Weapon", false) < 0) {
-			ReplaceString(szBuffer, 128, "KillAward", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
-			TrimString(szBuffer); StripQuotes(szBuffer);
-			strcopy(szReturn, iLength, szBuffer);
-			break;
-		}
-	}
-	
-	if (StrEqual(szReturn, "", false) || StrEqual(szReturn, "0", false)) {
-		strcopy(szReturn, iLength, "-1");
-		return false;
-	}
-	
-	delete hFile;
-	return true;
-}
-
-stock bool GetWeaponSpread(char[] szClassName, char[] szReturn, int iLength)
-{
-	char szBuffer[128];
-	
-	if (IsDefIndexKnife(GetWeaponDefIndexByClassName(szClassName))) {
-		FormatEx(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
-	} else {
-		FormatEx(szBuffer, 64, "scripts/%s.txt", szClassName);
-	}
-	
-	Handle hFile = OpenFile(szBuffer, "r");
-	
-	if (hFile == null) {
-		strcopy(szReturn, iLength, "0.0");
-		return false;
-	}
-	
-	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-		if (StrContains(szBuffer, "Spread", false) > -1 && StrContains(szBuffer, "InaccuracyCrouch", false) < 0) {
-			ReplaceString(szBuffer, 128, "Spread", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
-			TrimString(szBuffer); StripQuotes(szBuffer);
-			strcopy(szReturn, iLength, szBuffer);
-			break;
-		}
-	}
-	
-	if (StrEqual(szReturn, "", false) || StrEqual(szReturn, "0", false)) {
-		strcopy(szReturn, iLength, "0.0");
-		return false;
-	}
-	
-	delete hFile;
-	return true;
-}
-
-stock bool GetWeaponCycleTime(char[] szClassName, char[] szReturn, int iLength)
-{
-	char szBuffer[128];
-	
-	if (IsDefIndexKnife(GetWeaponDefIndexByClassName(szClassName))) {
-		FormatEx(szBuffer, 64, "scripts/weapon_knife.txt", szClassName);
-	} else {
-		FormatEx(szBuffer, 64, "scripts/%s.txt", szClassName);
-	}
-	
-	Handle hFile = OpenFile(szBuffer, "r");
-	
-	if (hFile == null) {
-		strcopy(szReturn, iLength, "0.0");
-		return false;
-	}
-	
-	while (ReadFileLine(hFile, szBuffer, 128) && !IsEndOfFile(hFile)) {
-		if (StrContains(szBuffer, "CycleTime", false) > -1 && StrContains(szBuffer, "TimeToIdle", false) < 0) {
-			ReplaceString(szBuffer, 128, "CycleTime", "", false); ReplaceString(szBuffer, 128, "\"", "", false);
-			TrimString(szBuffer); StripQuotes(szBuffer);
-			strcopy(szReturn, iLength, szBuffer);
-			break;
-		}
-	}
-	
-	if (StrEqual(szReturn, "", false) || StrEqual(szReturn, "0", false)) {
-		strcopy(szReturn, iLength, "0.0");
-		return false;
-	}
-	
-	delete hFile;
-	return true;
-}
-
 stock bool IsValidWeaponClassName(const char[] szClassName)
 {
 	if (!g_bItemsSynced || g_bItemsSyncing) {
@@ -1837,6 +1708,10 @@ stock int SlotNameToNum(const char[] szSlotName)
 	}
 	
 	return -1;
+}
+
+stock bool KvGetBool(Handle hKv, const char[] szKey, bool bDefaultValue = false) {
+	return view_as<bool>(KvGetNum(hKv, szKey, bDefaultValue ? 1 : 0));
 }
 
 public int Native_GetWeaponCount(Handle hPlugin, int iNumParams) {
@@ -3202,17 +3077,17 @@ stock int FindWeaponByClassName(int iClient, const char[] szClassName)
 		return -1;
 	}
 	
-	int iWeaponArraySize = GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons");
 	int iWeapon = -1;
 	int iCurrentDefIndex = -1;
 	
-	for (int i = 0; i < iWeaponArraySize; i++) {
+	for (int i = 0; i < GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons"); i++) {
 		iWeapon = GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i);
-		iCurrentDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 		
-		if (iCurrentDefIndex < 0 || iCurrentDefIndex > 700) {
+		if (!CSGOItems_IsValidWeapon(iWeapon)) {
 			continue;
 		}
+		
+		iCurrentDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 		
 		if (iCurrentDefIndex == iOriginalDefIndex) {
 			return iWeapon;
@@ -3257,9 +3132,8 @@ public int Native_GetWeaponSlotByWeaponNum(Handle hPlugin, int iNumParams)
 	return SlotNameToNum(g_szWeaponInfo[iWeaponNum][SLOT]);
 }
 
-public int Native_GetWeaponSlotByWeapon(Handle hPlugin, int iNumParams)
+public int GetWeaponSlotByWeapon(int iWeapon)
 {
-	int iWeapon = GetNativeCell(1);
 	int iWeaponNum = GetWeaponNumByWeapon(iWeapon);
 	
 	if (iWeaponNum < 0 || iWeaponNum > g_iWeaponCount) {
@@ -3267,6 +3141,13 @@ public int Native_GetWeaponSlotByWeapon(Handle hPlugin, int iNumParams)
 	}
 	
 	return SlotNameToNum(g_szWeaponInfo[iWeaponNum][SLOT]);
+}
+
+public int Native_GetWeaponSlotByWeapon(Handle hPlugin, int iNumParams)
+{
+	int iWeapon = GetNativeCell(1);
+	
+	return GetWeaponSlotByWeapon(iWeapon);
 }
 
 public int Native_GetWeaponSlotByDefIndex(Handle hPlugin, int iNumParams)
@@ -3747,10 +3628,6 @@ stock bool RemoveWeapon(int iClient, int iWeapon)
 		return false;
 	}
 	
-	if (g_bGivingWeapon[iClient]) {
-		return false;
-	}
-	
 	int iDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 	
 	if (iDefIndex < 0 || iDefIndex > 700) {
@@ -3761,18 +3638,6 @@ stock bool RemoveWeapon(int iClient, int iWeapon)
 	
 	if (iWeaponSlot < 0) {
 		return false;
-	}
-	
-	if (HasEntProp(iWeapon, Prop_Send, "m_bInitialized")) {
-		if (GetEntProp(iWeapon, Prop_Send, "m_bInitialized") == 0) {
-			return false;
-		}
-	}
-	
-	if (HasEntProp(iWeapon, Prop_Send, "m_bStartedArming")) {
-		if (GetEntSendPropOffs(iWeapon, "m_bStartedArming") > -1) {
-			return false;
-		}
 	}
 	
 	if (GetPlayerWeaponSlot(iClient, iWeaponSlot) != iWeapon) {
@@ -3812,10 +3677,6 @@ stock bool DropWeapon(int iClient, int iWeapon)
 		return false;
 	}
 	
-	if (g_bGivingWeapon[iClient]) {
-		return false;
-	}
-	
 	int iDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 	
 	if (iDefIndex < 0 || iDefIndex > 700) {
@@ -3826,18 +3687,6 @@ stock bool DropWeapon(int iClient, int iWeapon)
 	
 	if (iWeaponSlot < 0) {
 		return false;
-	}
-	
-	if (HasEntProp(iWeapon, Prop_Send, "m_bInitialized")) {
-		if (GetEntProp(iWeapon, Prop_Send, "m_bInitialized") == 0) {
-			return false;
-		}
-	}
-	
-	if (HasEntProp(iWeapon, Prop_Send, "m_bStartedArming")) {
-		if (GetEntSendPropOffs(iWeapon, "m_bStartedArming") > -1) {
-			return false;
-		}
 	}
 	
 	if (GetPlayerWeaponSlot(iClient, iWeaponSlot) != iWeapon) {
@@ -3885,20 +3734,17 @@ public int Native_RemoveAllWeapons(Handle hPlugin, int iNumParams)
 	int iSkipSlot = GetNativeCell(2);
 	
 	int iRemovedWeapons = 0;
-	int iWeaponArraySize = GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons");
-	int iDefIndex = -1;
 	int iWeaponSlot = -1;
 	int iWeapon = -1;
 	
-	for (int i = 0; i < iWeaponArraySize; i++) {
+	for (int i = 0; i < GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons"); i++) {
 		iWeapon = GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i);
-		iDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 		
-		if (iDefIndex < 0 || iDefIndex > 700) {
+		if (!CSGOItems_IsValidWeapon(iWeapon)) {
 			continue;
 		}
 		
-		iWeaponSlot = GetWeaponSlotByDefIndex(iDefIndex);
+		iWeaponSlot = GetWeaponSlotByWeapon(iWeapon);
 		
 		if (iWeaponSlot < 0) {
 			continue;
@@ -4016,12 +3862,16 @@ stock bool RemoveKnife(int iClient)
 		return false;
 	}
 	
-	int iWeaponArraySize = GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons");
 	int iWeapon = -1;
 	int iDefIndex = -1;
 	
-	for (int i = 0; i < iWeaponArraySize; i++) {
+	for (int i = 0; i < GetEntPropArraySize(iClient, Prop_Send, "m_hMyWeapons"); i++) {
 		iWeapon = GetEntPropEnt(iClient, Prop_Send, "m_hMyWeapons", i);
+		
+		if (!CSGOItems_IsValidWeapon(iWeapon)) {
+			continue;
+		}
+		
 		iDefIndex = GetWeaponDefIndexByWeapon(iWeapon);
 		
 		if (!IsDefIndexKnife(iDefIndex)) {
