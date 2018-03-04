@@ -1364,6 +1364,10 @@ stock void Prefaberator(int iItemType, int iClipAmmo, int iReserveAmmo, int iKil
 		KvGoBack(g_hItemsKv);
 	}
 	
+	if (iItemType == ITEMTYPE_WEAPON && !g_bIsDefIndexKnife[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])]) {
+		g_bIsDefIndexKnife[StringToInt(g_szWeaponInfo[g_iWeaponCount][DEFINDEX])] = StrContains(szPrefab, "melee", false) != -1;
+	}
+	
 	if (KvJumpToKey(g_hItemsKv, "used_by_classes")) {
 		if ((iItemType == ITEMTYPE_GLOVES && StrEqual(g_szGlovesInfo[g_iGlovesCount][TEAM], "", false)) || (iItemType == ITEMTYPE_WEAPON && StrEqual(g_szWeaponInfo[g_iWeaponCount][TEAM], "", false))) {
 			bool bTerrorist = KvGetBool(g_hItemsKv, "terrorists");
