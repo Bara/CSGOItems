@@ -294,6 +294,7 @@ DEFINES
 #define     VMTPATH			19
 #define     VTFPATH			20
 #define     QUALITY			21
+#define     PRICE           22
 
 /****************************************************************************************************
 ETIQUETTE.
@@ -343,11 +344,11 @@ bool g_bHibernation = false;
 /****************************************************************************************************
 STRINGS.
 *****************************************************************************************************/
-char g_szWeaponInfo[1000][22][48];
-char g_szPaintInfo[1000][22][192];
+char g_szWeaponInfo[1000][23][48];
+char g_szPaintInfo[1000][23][192];
 char g_szMusicKitInfo[1000][3][48];
-char g_szGlovesInfo[1000][22][192];
-char g_szSprayInfo[1000][22][128];
+char g_szGlovesInfo[1000][23][192];
+char g_szSprayInfo[1000][23][128];
 char g_szItemSetInfo[1000][3][48];
 char g_szLangPhrases[21982192];
 char g_szSchemaPhrases[21982192];
@@ -499,6 +500,12 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] szError, int iEr
 	CreateNative("CSGOItems_GetWeaponSlotByClassName", Native_GetWeaponSlotByClassName);
 	CreateNative("CSGOItems_GetWeaponSlotByDefIndex", Native_GetWeaponSlotByDefIndex);
 	CreateNative("CSGOItems_GetWeaponSlotByWeapon", Native_GetWeaponSlotByWeapon);
+
+	// Weapon Price
+	CreateNative("CSGOItems_GetWeaponPriceByWeaponNum", Native_GetWeaponPriceByWeaponNum);
+	CreateNative("CSGOItems_GetWeaponPriceByClassName", Native_GetWeaponPriceByClassName);
+	CreateNative("CSGOItems_GetWeaponPriceByDefIndex", Native_GetWeaponPriceByDefIndex);
+	CreateNative("CSGOItems_GetWeaponPriceByWeapon", Native_GetWeaponPriceByWeapon);
 	
 	// Weapon Ammo
 	CreateNative("CSGOItems_GetWeaponClipAmmoByDefIndex", Native_GetWeaponClipAmmoByDefIndex);
@@ -983,7 +990,7 @@ public void SyncItemData()
 		KvGetSectionName(g_hItemsKv, iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][DEFINDEX] : g_szGlovesInfo[g_iGlovesCount][DEFINDEX], 192);
 		strcopy(iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][CLASSNAME] : g_szGlovesInfo[g_iGlovesCount][CLASSNAME], sizeof(szBuffer2), szBuffer2);
 		
-		char szItemName[192]; Prefaberator(iItemType, -1, -1, -1, -1.0, -1.0, szItemName);
+		char szItemName[192]; Prefaberator(iItemType, -1, -1, -1, -1, -1.0, -1.0, szItemName);
 		
 		GetItemName(szItemName, iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][DISPLAYNAME] : g_szGlovesInfo[g_iGlovesCount][DISPLAYNAME], 192);
 		
@@ -1191,7 +1198,7 @@ public void SyncItemData()
 	g_bItemsSyncing = false;
 }
 
-stock void Prefaberator(int iItemType, int iClipAmmo, int iReserveAmmo, int iKillAward, float fSpread, float fCycleTime, char szItemName[192])
+stock void Prefaberator(int iItemType, int iClipAmmo, int iReserveAmmo, int iKillAward, int iPrice, float fSpread, float fCycleTime, char szItemName[192])
 {
 	char szPrefab[192]; KvGetString(g_hItemsKv, "prefab", szPrefab, sizeof(szPrefab));
 	
@@ -1292,6 +1299,10 @@ stock void Prefaberator(int iItemType, int iClipAmmo, int iReserveAmmo, int iKil
 			iKillAward = KvGetNum(g_hItemsKv, "kill award", -1);
 		}
 		
+		if (iPrice == -1) {
+			iPrice = KvGetNum(g_hItemsKv, "in game price", -1);
+		}
+		
 		if (fSpread == -1.0) {
 			fSpread = KvGetFloat(g_hItemsKv, "spread", -1.0);
 		}
@@ -1310,6 +1321,7 @@ stock void Prefaberator(int iItemType, int iClipAmmo, int iReserveAmmo, int iKil
 			IntToString(iClipAmmo, g_szWeaponInfo[g_iWeaponCount][CLIPAMMO], 192);
 			IntToString(iReserveAmmo, g_szWeaponInfo[g_iWeaponCount][RESERVEAMMO], 192);
 			IntToString(iKillAward, g_szWeaponInfo[g_iWeaponCount][KILLAWARD], 192);
+			IntToString(iPrice, g_szWeaponInfo[g_iWeaponCount][PRICE], 192);
 			
 			FloatToString(fSpread, g_szWeaponInfo[g_iWeaponCount][SPREAD], 192);
 			FloatToString(fCycleTime, g_szWeaponInfo[g_iWeaponCount][CYCLETIME], 192);
@@ -1327,7 +1339,7 @@ stock void Prefaberator(int iItemType, int iClipAmmo, int iReserveAmmo, int iKil
 		KvJumpToKey(g_hItemsKv, "prefabs");
 		KvJumpToKey(g_hItemsKv, szPrefab);
 		
-		Prefaberator(iItemType, iClipAmmo, iReserveAmmo, iKillAward, fSpread, fCycleTime, szItemName);
+		Prefaberator(iItemType, iClipAmmo, iReserveAmmo, iKillAward, iPrice, fSpread, fCycleTime, szItemName);
 	}
 }
 
@@ -3068,6 +3080,60 @@ stock int GetWeaponSlotByClassName(const char[] szClassName)
 	CSGOItems_LoopWeapons(iWeaponNum) {
 		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szClassName, false)) {
 			return SlotNameToNum(g_szWeaponInfo[iWeaponNum][SLOT]);
+		}
+	}
+	
+	return -1;
+}
+
+
+public int Native_GetWeaponPriceByClassName(Handle hPlugin, int iNumParams)
+{
+	char szBuffer[48]; GetNativeString(1, szBuffer, 48);
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StrEqual(g_szWeaponInfo[iWeaponNum][CLASSNAME], szBuffer, false)) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][PRICE]);
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetWeaponPriceByWeaponNum(Handle hPlugin, int iNumParams)
+{
+	int iWeaponNum = GetNativeCell(1);
+	
+	if (iWeaponNum < 0 || iWeaponNum > g_iWeaponCount) {
+		return -1;
+	}
+	
+	return StringToInt(g_szWeaponInfo[iWeaponNum][PRICE]);
+}
+
+public int Native_GetWeaponPriceByWeapon(Handle hPlugin, int iNumParams)
+{
+	int iWeapon = GetNativeCell(1);
+	int iWeaponNum = GetWeaponNumByWeapon(iWeapon);
+	
+	if (iWeaponNum < 0 || iWeaponNum > g_iWeaponCount) {
+		return -1;
+	}
+	
+	return StringToInt(g_szWeaponInfo[iWeaponNum][PRICE]);
+}
+
+public int Native_GetWeaponPriceByDefIndex(Handle hPlugin, int iNumParams)
+{
+	int iDefIndex = GetNativeCell(1);
+	
+	if (iDefIndex < 0 || iDefIndex > 700) {
+		return -1;
+	}
+	
+	CSGOItems_LoopWeapons(iWeaponNum) {
+		if (StringToInt(g_szWeaponInfo[iWeaponNum][DEFINDEX]) == iDefIndex) {
+			return StringToInt(g_szWeaponInfo[iWeaponNum][PRICE]);
 		}
 	}
 	

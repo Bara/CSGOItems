@@ -86,7 +86,11 @@ public void CSGOItems_OnItemsSynced()
 		}
 		
 		CSGOItems_GetWeaponDisplayNameByWeaponNum(i, szBuffer, sizeof(szBuffer));
+		int iPrice = CSGOItems_GetWeaponPriceByWeaponNum(i);
+		
 		BuildPath(Path_SM, szPath, sizeof(szPath), "logs/ItemLog/Weapons/%s.txt", szBuffer);
+
+		PrintToServer("Weapon: %s, Price: %d", szBuffer, iPrice);
 		
 		for (int x = 0; x < alPaints.Length; x++) {
 			alPaints.GetString(x, szBuffer, sizeof(szBuffer)); ExplodeString(szBuffer, ";", szSplitBuffer, 128, 128);
