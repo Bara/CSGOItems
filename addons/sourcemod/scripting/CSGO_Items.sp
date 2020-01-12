@@ -260,13 +260,11 @@ INCLUDES
 #include <sdktools>
 #include <cstrike> 
 #include <sdkhooks> 
+#include <profiler>
 #include <csgoitems> 
-#include <SteamWorks> 
 #include <autoexecconfig> 
-#include <regex> 
-
-#undef REQUIRE_EXTENSIONS
-#include <ptah>
+#include <regex>
+#include <dynamic>
 
 /****************************************************************************************************
 DEFINES
@@ -296,9 +294,6 @@ DEFINES
 #define     VMTPATH			19
 #define     VTFPATH			20
 #define     QUALITY			21
-
-#define 	LANGURL         "http://api.fragdeluxe.com/itemdata/csgo_language.php"
-#define 	SCHEMAURL         "http://api.fragdeluxe.com/itemdata/csgo_schema.php"
 
 /****************************************************************************************************
 ETIQUETTE.
@@ -336,16 +331,11 @@ bool g_bIsDefIndexSkinnable[1000];
 bool g_bSkinNumGloveApplicable[1000];
 bool g_bItemsSynced;
 bool g_bItemsSyncing;
-bool g_bLanguageDownloading;
-bool g_bSchemaDownloading;
 bool g_bGivingWeapon[MAXPLAYERS + 1];
 bool g_bIsNativeSkin[3][1000][1000];
 bool g_bIsSkinInSet[1000][1000];
-bool g_bSteamWorksLoaded = false;
 bool g_bRoundEnd = false;
 bool g_bSpraysEnabled = false;
-bool g_bPTAH = false;
-bool g_bSpawnItemFromDefIndex = false;
 bool g_bFollowGuidelines = false;
 bool g_bWeaponEquipped[MAXPLAYERS + 1][2049];
 bool g_bHibernation = false;
@@ -354,13 +344,13 @@ bool g_bHibernation = false;
 STRINGS.
 *****************************************************************************************************/
 char g_szWeaponInfo[1000][22][48];
-char g_szPaintInfo[1000][22][96];
+char g_szPaintInfo[1000][22][192];
 char g_szMusicKitInfo[1000][3][48];
-char g_szGlovesInfo[1000][22][96];
+char g_szGlovesInfo[1000][22][192];
 char g_szSprayInfo[1000][22][128];
 char g_szItemSetInfo[1000][3][48];
-char g_szLangPhrases[2198296];
-char g_szSchemaPhrases[2198296];
+char g_szLangPhrases[21982192];
+char g_szSchemaPhrases[21982192];
 char g_szCDNPhrases[2000][384];
 
 /****************************************************************************************************
@@ -421,17 +411,10 @@ public void OnPluginStart()
 	g_hCvarSpraysEnabled.AddChangeHook(OnCvarChanged);
 	AutoExecConfig_CleanFile(); AutoExecConfig_ExecuteFile();
 	
-	g_bPTAH = LibraryExists("PTaH");
-	g_bSpawnItemFromDefIndex = g_bPTAH ? GetFeatureStatus(FeatureType_Native, "PTaH_SpawnItemFromDefIndex") == FeatureStatus_Available : false;
-	
-	#if defined _PTaH_included
-	if (g_bPTAH) {
-		PTaH(PTaH_GiveNamedItem, Hook, GiveNamedItemPost);
-	}
-	#endif
-	
 	AddNormalSoundHook(OnNormalSoundPlayed);
 	FindAndHookHibernation();
+
+	RetrieveLanguage();
 }
 
 public void OnCvarChanged(ConVar hConVar, const char[] szOldValue, const char[] szNewValue)
@@ -441,76 +424,6 @@ public void OnCvarChanged(ConVar hConVar, const char[] szOldValue, const char[] 
 	} else if (hConVar == g_hCvarHibernation && view_as<bool>(StringToInt(szNewValue)) && !g_bItemsSynced) {
 		g_hCvarHibernation.BoolValue = false;
 		g_bHibernation = true;
-	}
-}
-
-public int SteamWorks_SteamServersConnected() {
-	RetrieveLanguage();
-}
-
-public Action SteamWorks_RestartRequested()
-{
-	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, LANGURL);
-	
-	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Pragma", "no-cache");
-	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Cache-Control", "no-cache");
-	SteamWorks_SetHTTPRequestGetOrPostParameter(hRequest, "update", "true");
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 60);
-	SteamWorks_SetHTTPCallbacks(hRequest, CallBack_LangUpdated);
-	
-	if (hRequest != null) {
-		SteamWorks_SendHTTPRequest(hRequest);
-	}
-	
-	hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, SCHEMAURL);
-	
-	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Pragma", "no-cache");
-	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Cache-Control", "no-cache");
-	SteamWorks_SetHTTPRequestGetOrPostParameter(hRequest, "update", "true");
-	SteamWorks_SetHTTPRequestNetworkActivityTimeout(hRequest, 60);
-	SteamWorks_SetHTTPCallbacks(hRequest, CallBack_SchemaUpdated);
-	
-	if (hRequest != null) {
-		SteamWorks_SendHTTPRequest(hRequest);
-	}
-	
-	delete hRequest;
-}
-
-public int CallBack_LangUpdated(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything) {
-	delete hRequest;
-}
-
-public int CallBack_SchemaUpdated(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything) {
-	delete hRequest;
-}
-
-public void OnAllPluginsLoaded() {
-	g_bSteamWorksLoaded = LibraryExists("SteamWorks");
-	
-	if (g_bSteamWorksLoaded) {
-		RetrieveLanguage();
-	}
-}
-
-public void OnLibraryAdded(const char[] szName) {
-	if (StrEqual(szName, "SteamWorks")) {
-		g_bSteamWorksLoaded = true;
-		RetrieveLanguage();
-	} else if (StrEqual(szName, "PTaH") && !g_bPTAH) {
-		PTaH(PTaH_GiveNamedItem, Hook, GiveNamedItemPost);
-		
-		g_bPTAH = true;
-		g_bSpawnItemFromDefIndex = GetFeatureStatus(FeatureType_Native, "PTaH_SpawnItemFromDefIndex") == FeatureStatus_Available;
-	}
-}
-
-public void OnLibraryRemoved(const char[] szName) {
-	if (StrEqual(szName, "SteamWorks")) {
-		g_bSteamWorksLoaded = false;
-	} else if (StrEqual(szName, "PTaH")) {
-		g_bPTAH = false;
-		g_bSpawnItemFromDefIndex = false;
 	}
 }
 
@@ -734,7 +647,6 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] szError, int iEr
 	CreateNative("CSGOItems_GetSprayCacheIndexDefIndex", Native_GetSprayCacheIndexByDefIndex);
 	
 	RegPluginLibrary("CSGO_Items");
-	MarkNativeAsOptional("PTaH_SpawnItemFromDefIndex");
 	
 	return APLRes_Success;
 }
@@ -810,24 +722,11 @@ public void OnWeaponDropPost(int iClient, int iWeapon)
 	g_bWeaponEquipped[iClient][iWeapon] = false;
 }
 
-public void GiveNamedItemPost(int iClient, const char[] sClassname, const CEconItemView Item, int iEnt)
-{
-	int iDefIndex = GetWeaponDefIndexByWeapon(iEnt);
-	
-	if (IsDefIndexKnife(iDefIndex) && !g_bWeaponEquipped[iClient][iEnt]) {
-		EquipPlayerWeapon(iClient, iEnt);
-	}
-}
-
 public bool RetrieveLanguage()
 {
 	FindAndHookHibernation();
-	
-	if (!g_bSteamWorksLoaded) {
-		return false;
-	}
-	
-	if (g_bLanguageDownloading || g_bSchemaDownloading || g_bItemsSyncing || !SteamWorks_IsConnected()) {
+
+	if (g_bItemsSyncing) {
 		return false;
 	}
 	
@@ -836,32 +735,14 @@ public bool RetrieveLanguage()
 		return true;
 	}
 	
-	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, LANGURL);
-	
-	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Pragma", "no-cache");
-	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Cache-Control", "no-cache");
-	SteamWorks_SetHTTPCallbacks(hRequest, Language_Retrieved);
-	
-	if (SteamWorks_SendHTTPRequest(hRequest) && hRequest != null) {
-		g_bLanguageDownloading = true;
-		g_iLanguageDownloadAttempts++;
-		return true;
-	} else {
-		CreateTimer(2.0, Timer_SyncLanguage);
-		LogMessage("[WARNING] SteamWorks language retrieval failed, attempting to use old file (If one is available)");
-		delete hRequest;
-	}
+	CreateTimer(0.2, Timer_SyncLanguage);
 	
 	return false;
 }
 
 public Action Timer_Wait1(Handle hTimer)
 {
-	if (!g_bSteamWorksLoaded) {
-		return Plugin_Stop;
-	}
-	
-	if (g_bLanguageDownloading || g_bSchemaDownloading || g_bItemsSyncing || !SteamWorks_IsConnected()) {
+	if (g_bItemsSyncing) {
 		return Plugin_Stop;
 	}
 	
@@ -874,34 +755,23 @@ public Action Timer_Wait1(Handle hTimer)
 	return Plugin_Stop;
 }
 
-public int Language_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything)
-{
-	if (bRequestSuccessful && eStatusCode == k_EHTTPStatusCode200OK) {
-		SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "resource/csgo_english_utf8.txt");
-	}
-	
-	LogMessage("UTF-8 language file successfully retrieved.");
-	
-	CreateTimer(1.0, Timer_SyncLanguage, -1, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
-	delete hRequest;
-}
-
 public Action Timer_SyncLanguage(Handle hTimer)
 {
 	if (g_bRoundEnd) {
 		return Plugin_Continue;
 	}
+
+	ConvertResourceFile("english");
 	
-	Handle hLanguageFile = OpenFile("resource/csgo_english_utf8.txt", "r");
+	Handle hLanguageFile = OpenFile("resource/csgo_english.txt.utf8", "r");
 	
 	if (hLanguageFile != null) {
-		ReadFileString(hLanguageFile, g_szLangPhrases, 2198296);
+		ReadFileString(hLanguageFile, g_szLangPhrases, 21982192);
 	}
 	else {
-		g_bLanguageDownloading = false;
 		delete hLanguageFile;
 		
-		DeleteFile("resource/csgo_english_utf8.txt");
+		DeleteFile("resource/csgo_english.txt.utf8");
 		
 		if (g_iLanguageDownloadAttempts < 10) {
 			RetrieveLanguage();
@@ -909,13 +779,12 @@ public Action Timer_SyncLanguage(Handle hTimer)
 		} else {
 			Call_StartForward(g_hOnPluginEnd);
 			Call_Finish();
-			SetFailState("UTF-8 language file is corrupted, failed after %d attempts. \nCheck: %s", g_iLanguageDownloadAttempts, LANGURL);
+			SetFailState("UTF-8 language file is corrupted, failed after %d attempts.", g_iLanguageDownloadAttempts);
 		}
 	}
 	
 	delete hLanguageFile;
 	
-	g_bLanguageDownloading = false;
 	g_iLanguageDownloadAttempts = 0;
 	LogMessage("UTF-8 language file successfully processed, retrieving item schema.");
 	
@@ -926,11 +795,7 @@ public Action Timer_SyncLanguage(Handle hTimer)
 
 public bool RetrieveItemSchema()
 {
-	if (!g_bSteamWorksLoaded) {
-		return false;
-	}
-	
-	if (g_bLanguageDownloading || g_bSchemaDownloading || g_bItemsSyncing || !SteamWorks_IsConnected()) {
+	if (g_bItemsSyncing) {
 		return false;
 	}
 	
@@ -939,32 +804,14 @@ public bool RetrieveItemSchema()
 		return true;
 	}
 	
-	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, SCHEMAURL);
-	
-	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Pragma", "no-cache");
-	SteamWorks_SetHTTPRequestHeaderValue(hRequest, "Cache-Control", "no-cache");
-	SteamWorks_SetHTTPCallbacks(hRequest, Schema_Retrieved);
-	
-	if (SteamWorks_SendHTTPRequest(hRequest) && hRequest != null) {
-		g_bSchemaDownloading = true;
-		g_iSchemaDownloadAttempts++;
-		return true;
-	} else {
-		CreateTimer(2.0, Timer_SyncSchema);
-		LogMessage("[WARNING] SteamWorks schema retrieval failed, attempting to use old file (If one is available)");
-		delete hRequest;
-	}
+	CreateTimer(0.2, Timer_SyncSchema);
 	
 	return false;
 }
 
 public Action Timer_Wait2(Handle hTimer)
 {
-	if (!g_bSteamWorksLoaded) {
-		return Plugin_Stop;
-	}
-	
-	if (g_bLanguageDownloading || g_bSchemaDownloading || g_bItemsSyncing || !SteamWorks_IsConnected()) {
+	if (g_bItemsSyncing) {
 		return Plugin_Stop;
 	}
 	
@@ -977,34 +824,24 @@ public Action Timer_Wait2(Handle hTimer)
 	return Plugin_Stop;
 }
 
-public int Schema_Retrieved(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, any anything)
-{
-	if (bRequestSuccessful && eStatusCode == k_EHTTPStatusCode200OK) {
-		SteamWorks_WriteHTTPResponseBodyToFile(hRequest, "scripts/items/items_game_fixed.txt");
-	}
-	
-	LogMessage("Item Schema successfully retrieved.");
-	
-	CreateTimer(1.0, Timer_SyncSchema, -1, TIMER_FLAG_NO_MAPCHANGE | TIMER_REPEAT);
-	delete hRequest;
-}
-
 public Action Timer_SyncSchema(Handle hTimer)
 {
 	if (g_bRoundEnd) {
 		return Plugin_Continue;
 	}
+
+	RebaseItemsGame();
 	
-	Handle hSchemaFile = OpenFile("scripts/items/items_game_fixed.txt", "r");
+	Handle hSchemaFile = OpenFile("scripts/items/items_game_dynamic.txt", "r");
 	
 	if (hSchemaFile != null) {
-		ReadFileString(hSchemaFile, g_szSchemaPhrases, 2198296);
+		ReadFileString(hSchemaFile, g_szSchemaPhrases, 21982192);
 	} else {
 		g_bItemsSyncing = false;
 		
 		delete hSchemaFile;
 		
-		DeleteFile("scripts/items/items_game_fixed.txt");
+		DeleteFile("scripts/items/items_game_dynamic.txt");
 		
 		if (g_iSchemaDownloadAttempts < 10) {
 			RetrieveItemSchema();
@@ -1012,13 +849,12 @@ public Action Timer_SyncSchema(Handle hTimer)
 		} else {
 			Call_StartForward(g_hOnPluginEnd);
 			Call_Finish();
-			SetFailState("Item schema is corrupted, failed after %d attempts. \nCheck: %s", g_iSchemaDownloadAttempts, SCHEMAURL);
+			SetFailState("Item schema is corrupted, failed after %d attempts.", g_iSchemaDownloadAttempts);
 		}
 	}
 	
 	delete hSchemaFile;
 	
-	g_bSchemaDownloading = false;
 	g_iSchemaDownloadAttempts = 0;
 	
 	int iStart = GetTime();
@@ -1035,6 +871,46 @@ public Action Timer_SyncSchema(Handle hTimer)
 	}
 	
 	return Plugin_Stop;
+}
+
+public Action PK_ReadDynamicKeyValue(Dynamic obj, const char[] member, int depth)
+{
+	// Allow the basekey (depth=0) to be loaded
+	if (depth == 0)
+		return Plugin_Continue;
+	
+	// Check all subkeys (depth=1) within the basekey (depth=0)
+	if (depth == 1)
+	{
+		// Allow these subkeys (depth=1) in the basekey (depth=0) to load
+		if (StrEqual(member, "items"))
+			return Plugin_Continue;
+		if (StrEqual(member, "paint_kits"))
+			return Plugin_Continue;
+		if (StrEqual(member, "music_definitions"))
+			return Plugin_Continue;
+		if (StrEqual(member, "item_sets"))
+			return Plugin_Continue;
+		if (StrEqual(member, "sticker_kits"))
+			return Plugin_Continue;
+		if (StrEqual(member, "paint_kits_rarity"))
+			return Plugin_Continue;
+		if (StrEqual(member, "used_by_classes"))
+			return Plugin_Continue;
+		if (StrEqual(member, "attributes"))
+			return Plugin_Continue;
+		if (StrEqual(member, "prefabs"))
+			return Plugin_Continue;
+
+		else
+		{
+			// Block all other subkeys (depth=1)
+			return Plugin_Stop;
+		}
+	}
+	
+	// Let all subkeys in higher depths load (depth>1)
+	return Plugin_Continue;
 }
 
 public void SyncItemData()
@@ -1077,7 +953,7 @@ public void SyncItemData()
 	
 	g_hItemsKv = CreateKeyValues("items_game");
 	
-	if (!FileToKeyValues(g_hItemsKv, "scripts/items/items_game_fixed.txt")) {
+	if (!FileToKeyValues(g_hItemsKv, "scripts/items/items_game_dynamic.txt")) {
 		Call_StartForward(g_hOnPluginEnd);
 		Call_Finish();
 		SetFailState("Unable to Process Item Schema");
@@ -1089,7 +965,7 @@ public void SyncItemData()
 		SetFailState("Unable to find Item keyvalues");
 	}
 	
-	char szBuffer[128]; char szBuffer2[128]; char szBuffer3[96][96];
+	char szBuffer[256]; char szBuffer2[256]; char szBuffer3[192][192];
 	int iDefIndex = 0;
 	
 	do {
@@ -1104,12 +980,12 @@ public void SyncItemData()
 		
 		int iItemType = bGloves ? ITEMTYPE_GLOVES : ITEMTYPE_WEAPON;
 		
-		KvGetSectionName(g_hItemsKv, iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][DEFINDEX] : g_szGlovesInfo[g_iGlovesCount][DEFINDEX], 96);
+		KvGetSectionName(g_hItemsKv, iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][DEFINDEX] : g_szGlovesInfo[g_iGlovesCount][DEFINDEX], 192);
 		strcopy(iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][CLASSNAME] : g_szGlovesInfo[g_iGlovesCount][CLASSNAME], sizeof(szBuffer2), szBuffer2);
 		
-		char szItemName[96]; Prefaberator(iItemType, -1, -1, -1, -1.0, -1.0, szItemName);
+		char szItemName[192]; Prefaberator(iItemType, -1, -1, -1, -1.0, -1.0, szItemName);
 		
-		GetItemName(szItemName, iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][DISPLAYNAME] : g_szGlovesInfo[g_iGlovesCount][DISPLAYNAME], 96);
+		GetItemName(szItemName, iItemType == ITEMTYPE_WEAPON ? g_szWeaponInfo[g_iWeaponCount][DISPLAYNAME] : g_szGlovesInfo[g_iGlovesCount][DISPLAYNAME], 192);
 		
 		if (bGloves) {
 			g_iGlovesCount++;
@@ -1122,11 +998,12 @@ public void SyncItemData()
 	if (!KvJumpToKey(g_hItemsKv, "paint_kits") || !KvGotoFirstSubKey(g_hItemsKv, false)) {
 		Call_StartForward(g_hOnPluginEnd);
 		Call_Finish();
-		SetFailState("Unable to find Paintkit keyvalues");
+		SetFailState("Unable to find Paintkit keyvalues (KvJumpToKey: %d, KvGotoFirstSubKey: %d)", KvJumpToKey(g_hItemsKv, "paint_kits"), KvGotoFirstSubKey(g_hItemsKv, false));
 	}
 	
 	do {
-		KvGetSectionName(g_hItemsKv, szBuffer, sizeof(szBuffer)); int iSkinDefIndex = StringToInt(szBuffer);
+		KvGetSectionName(g_hItemsKv, szBuffer, sizeof(szBuffer));
+		int iSkinDefIndex = StringToInt(szBuffer);
 		
 		if (iSkinDefIndex == 9001) {
 			strcopy(szBuffer, sizeof(szBuffer), "1");
@@ -1136,17 +1013,17 @@ public void SyncItemData()
 		strcopy(g_szPaintInfo[g_iPaintCount][DEFINDEX], sizeof(szBuffer), szBuffer);
 		
 		if (iSkinDefIndex == 0) {
-			strcopy(g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 96, "Default");
+			strcopy(g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 192, "Default");
 		} else if (iSkinDefIndex == 1) {
-			strcopy(g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 96, "Vanilla");
+			strcopy(g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 192, "Vanilla");
 		} else {
-			KvGetString(g_hItemsKv, "name", g_szPaintInfo[g_iPaintCount][ITEMNAME], 96);
+			KvGetString(g_hItemsKv, "name", g_szPaintInfo[g_iPaintCount][ITEMNAME], 192);
 			KvGetString(g_hItemsKv, "description_tag", szBuffer, sizeof(szBuffer));
 			
-			GetItemName(szBuffer, g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 96);
+			GetItemName(szBuffer, g_szPaintInfo[g_iPaintCount][DISPLAYNAME], 192);
 		}
 		
-		KvGetString(g_hItemsKv, "vmt_path", g_szPaintInfo[g_iPaintCount][VMTPATH], 96);
+		KvGetString(g_hItemsKv, "vmt_path", g_szPaintInfo[g_iPaintCount][VMTPATH], 192);
 		
 		g_bSkinNumGloveApplicable[g_iPaintCount] = StrContains(g_szPaintInfo[g_iPaintCount][VMTPATH], "paints_gloves", false) > -1;
 		
@@ -1222,9 +1099,9 @@ public void SyncItemData()
 			continue;
 		}
 		
-		strcopy(g_szMusicKitInfo[g_iMusicKitCount][DEFINDEX], 96, szBuffer);
+		strcopy(g_szMusicKitInfo[g_iMusicKitCount][DEFINDEX], 192, szBuffer);
 		KvGetString(g_hItemsKv, "loc_name", szBuffer2, sizeof(szBuffer2));
-		GetItemName(szBuffer2, g_szMusicKitInfo[g_iMusicKitCount][DISPLAYNAME], 96);
+		GetItemName(szBuffer2, g_szMusicKitInfo[g_iMusicKitCount][DISPLAYNAME], 192);
 		
 		g_iMusicKitCount++;
 	} while (KvGotoNextKey(g_hItemsKv)); KvRewind(g_hItemsKv);
@@ -1236,14 +1113,14 @@ public void SyncItemData()
 	}
 	
 	do {
-		KvGetString(g_hItemsKv, "name", g_szItemSetInfo[g_iItemSetCount][CLASSNAME], 96);
-		GetItemName(g_szItemSetInfo[g_iItemSetCount][CLASSNAME], g_szItemSetInfo[g_iItemSetCount][DISPLAYNAME], 96);
+		KvGetString(g_hItemsKv, "name", g_szItemSetInfo[g_iItemSetCount][CLASSNAME], 192);
+		GetItemName(g_szItemSetInfo[g_iItemSetCount][CLASSNAME], g_szItemSetInfo[g_iItemSetCount][DISPLAYNAME], 192);
 		
 		if (KvJumpToKey(g_hItemsKv, "items")) {
 			if (KvGotoFirstSubKey(g_hItemsKv, false)) {
 				do {
 					KvGetSectionName(g_hItemsKv, szBuffer, sizeof(szBuffer));
-					ExplodeString(szBuffer, "]", szBuffer3, 96, 96); ReplaceString(szBuffer3[0], 96, "[", ""); ReplaceString(szBuffer3[1], 96, "]", "");
+					ExplodeString(szBuffer, "]", szBuffer3, 192, 192); ReplaceString(szBuffer3[0], 192, "[", ""); ReplaceString(szBuffer3[1], 192, "]", "");
 					
 					CSGOItems_LoopSkins(iSkinNum) {
 						if (StrEqual(szBuffer3[0], g_szPaintInfo[iSkinNum][ITEMNAME])) {
@@ -1279,13 +1156,13 @@ public void SyncItemData()
 		KvGetString(g_hItemsKv, "item_name", szBuffer2, sizeof(szBuffer2));
 		
 		if (StrEqual(szBuffer2, "#StickerKit_comm01_rekt", false)) {
-			strcopy(g_szSprayInfo[g_iSprayCount][DISPLAYNAME], 96, "Rekt");
+			strcopy(g_szSprayInfo[g_iSprayCount][DISPLAYNAME], 192, "Rekt");
 		} else {
-			GetItemName(szBuffer2, g_szSprayInfo[g_iSprayCount][DISPLAYNAME], 96);
+			GetItemName(szBuffer2, g_szSprayInfo[g_iSprayCount][DISPLAYNAME], 192);
 		}
 		
 		KvGetSectionName(g_hItemsKv, szBuffer2, sizeof(szBuffer2));
-		strcopy(g_szSprayInfo[g_iSprayCount][DEFINDEX], 96, szBuffer2);
+		strcopy(g_szSprayInfo[g_iSprayCount][DEFINDEX], 192, szBuffer2);
 		
 		char szExplode[2][64]; ExplodeString(szBuffer, "/", szExplode, 2, 64);
 		
@@ -1303,7 +1180,7 @@ public void SyncItemData()
 	
 	do {
 		CSGOItems_LoopSkins(iSkinNum) {
-			KvGetString(g_hItemsKv, g_szPaintInfo[iSkinNum][ITEMNAME], g_szPaintInfo[iSkinNum][RARITY], 96);
+			KvGetString(g_hItemsKv, g_szPaintInfo[iSkinNum][ITEMNAME], g_szPaintInfo[iSkinNum][RARITY], 192);
 		}
 	} while (KvGotoNextKey(g_hItemsKv)); delete g_hItemsKv;
 	
@@ -1314,14 +1191,14 @@ public void SyncItemData()
 	g_bItemsSyncing = false;
 }
 
-stock void Prefaberator(int iItemType, int iClipAmmo, int iReserveAmmo, int iKillAward, float fSpread, float fCycleTime, char szItemName[96])
+stock void Prefaberator(int iItemType, int iClipAmmo, int iReserveAmmo, int iKillAward, float fSpread, float fCycleTime, char szItemName[192])
 {
-	char szPrefab[96]; KvGetString(g_hItemsKv, "prefab", szPrefab, sizeof(szPrefab));
+	char szPrefab[192]; KvGetString(g_hItemsKv, "prefab", szPrefab, sizeof(szPrefab));
 	
 	if (iItemType == ITEMTYPE_GLOVES && StrEqual(g_szGlovesInfo[g_iGlovesCount][TYPE], "", false)) {
-		strcopy(g_szGlovesInfo[g_iGlovesCount][TYPE], 96, szPrefab);
+		strcopy(g_szGlovesInfo[g_iGlovesCount][TYPE], 192, szPrefab);
 	} else if (iItemType == ITEMTYPE_WEAPON && StrEqual(g_szWeaponInfo[g_iWeaponCount][TYPE], "", false)) {
-		strcopy(g_szWeaponInfo[g_iWeaponCount][TYPE], 96, szPrefab);
+		strcopy(g_szWeaponInfo[g_iWeaponCount][TYPE], 192, szPrefab);
 	}
 	
 	if (StrEqual(szItemName, "", false)) {
@@ -1430,12 +1307,12 @@ stock void Prefaberator(int iItemType, int iClipAmmo, int iReserveAmmo, int iKil
 	
 	if (StrEqual(szPrefab, "", false)) {
 		if (iItemType == ITEMTYPE_WEAPON) {
-			IntToString(iClipAmmo, g_szWeaponInfo[g_iWeaponCount][CLIPAMMO], 96);
-			IntToString(iReserveAmmo, g_szWeaponInfo[g_iWeaponCount][RESERVEAMMO], 96);
-			IntToString(iKillAward, g_szWeaponInfo[g_iWeaponCount][KILLAWARD], 96);
+			IntToString(iClipAmmo, g_szWeaponInfo[g_iWeaponCount][CLIPAMMO], 192);
+			IntToString(iReserveAmmo, g_szWeaponInfo[g_iWeaponCount][RESERVEAMMO], 192);
+			IntToString(iKillAward, g_szWeaponInfo[g_iWeaponCount][KILLAWARD], 192);
 			
-			FloatToString(fSpread, g_szWeaponInfo[g_iWeaponCount][SPREAD], 96);
-			FloatToString(fCycleTime, g_szWeaponInfo[g_iWeaponCount][CYCLETIME], 96);
+			FloatToString(fSpread, g_szWeaponInfo[g_iWeaponCount][SPREAD], 192);
+			FloatToString(fCycleTime, g_szWeaponInfo[g_iWeaponCount][CYCLETIME], 192);
 		}
 		
 		KvJumpToKey(g_hItemsKv, "items");
@@ -1472,16 +1349,16 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 			continue;
 		}
 		
-		CreateDirectory(szPath, 777);
+		CreateDirectory(szPath, FPERM_U_READ|FPERM_U_WRITE|FPERM_U_EXEC|FPERM_G_READ|FPERM_G_EXEC|FPERM_O_READ|FPERM_O_EXEC);
 	}
-	
+
 	if (!FileExists(szFullFile)) {
-		File fFile = OpenFile(szFullFile, "w+");
-		
+		File fFile = OpenFile(szFullFile, "w");
+
 		if (fFile == null) {
 			return false;
 		}
-		
+
 		FormatEx(szTexturePathFormat, 128, "\"$basetexture\"	\"%s\"", szTexturePath);
 		ReplaceString(szTexturePathFormat, 128, ".vtf", "", false);
 		
@@ -1493,7 +1370,7 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 		fFile.WriteLine("	\"$mappingwidth\" \"48\"");
 		fFile.WriteLine("	\"$mappingheight\" \"48\"");
 		fFile.WriteLine("}");
-		
+
 		/*
 		FormatEx(szOutFile, PLATFORM_MAX_PATH, "%s.bz2", szFullFile);
 		
@@ -1505,7 +1382,7 @@ stock bool CreateSprayVMT(int iSprayNum, const char[] szDirectory, const char[] 
 		*/
 		delete fFile;
 	}
-	
+
 	FormatEx(g_szSprayInfo[iSprayNum][VMTPATH], PLATFORM_MAX_PATH, szFullFile);
 	
 	return true;
@@ -3373,17 +3250,6 @@ stock int GiveWeapon(int iClient, const char[] szBuffer, int iReserveAmmo, int i
 	int iWeapon = -1;
 	bool bGiven = false;
 	
-	if (g_bPTAH && g_bSpawnItemFromDefIndex && bKnife) {
-		float fVecOrigin[3]; GetClientAbsOrigin(iClient, fVecOrigin);
-		float fVecAngles[3]; GetClientAbsAngles(iClient, fVecAngles);
-		
-		iWeapon = PTaH_SpawnItemFromDefIndex(iWeaponDefIndex, fVecOrigin, fVecAngles);
-		
-		if (IsValidWeapon(iWeapon)) {
-			bGiven = true;
-		}
-	}
-	
 	if (!bGiven) {
 		if (bKnife && g_bFollowGuidelines) {
 			strcopy(szClassName, 48, iClientTeam == CS_TEAM_T ? "weapon_knife_t" : "weapon_knife");
@@ -4005,3 +3871,138 @@ stock int FindStringIndex2(int tableidx, const char[] str)
 	
 	return INVALID_STRING_INDEX;
 } 
+
+void RebaseItemsGame()
+{
+    LogMessage("Rebase `items_game.txt`");
+
+    Profiler profiler = new Profiler();
+    profiler.Start();
+
+    Dynamic dItemsGame = Dynamic();
+    dItemsGame.ReadKeyValues("scripts/items/items_game.txt", PLATFORM_MAX_PATH, ReadDynamicKeyValue);
+    dItemsGame.GetDynamic("items");
+    dItemsGame.GetDynamic("paint_kits");
+    dItemsGame.GetDynamic("music_definitions");
+    dItemsGame.GetDynamic("item_sets");
+    dItemsGame.GetDynamic("sticker_kits");
+    dItemsGame.GetDynamic("paint_kits_rarity");
+    dItemsGame.GetDynamic("used_by_classes");
+    dItemsGame.GetDynamic("attributes");
+    dItemsGame.GetDynamic("prefabs");
+    dItemsGame.WriteKeyValues("scripts/items/items_game_dynamic.txt", "items_game");
+    dItemsGame.Dispose(true);
+
+    profiler.Stop();
+    float fTime = profiler.Time;
+    delete profiler;
+
+    LogMessage("RebaseItemsGame took %f seconds.", fTime);
+}
+
+public Action ReadDynamicKeyValue(Dynamic obj, const char[] member, int depth)
+{
+    if (depth == 0)
+    {
+        return Plugin_Continue;
+    }
+    
+    if (depth == 1)
+    {
+        if (StrEqual(member, "items"))
+        {
+            return Plugin_Continue;
+        }
+        else if (StrEqual(member, "paint_kits"))
+        {
+            return Plugin_Continue;
+        }
+        else if (StrEqual(member, "music_definitions"))
+        {
+            return Plugin_Continue;
+        }
+        else if (StrEqual(member, "item_sets"))
+        {
+            return Plugin_Continue;
+        }
+        else if (StrEqual(member, "sticker_kits"))
+        {
+            return Plugin_Continue;
+        }
+        else if (StrEqual(member, "paint_kits_rarity"))
+        {
+            return Plugin_Continue;
+        }
+        else if (StrEqual(member, "used_by_classes"))
+        {
+            return Plugin_Continue;
+        }
+        else if (StrEqual(member, "attributes"))
+        {
+            return Plugin_Continue;
+        }
+        else if (StrEqual(member, "prefabs"))
+        {
+            return Plugin_Continue;
+        }
+        else
+        {
+            return Plugin_Stop;
+        }
+    }
+    
+    return Plugin_Continue;
+}
+
+void ConvertResourceFile(const char[] language)
+{
+    Profiler profiler = new Profiler();
+    profiler.Start();
+
+    LogMessage("Converting `csgo_%s.txt` to UTF-8", language);
+
+    char sOriginal[PLATFORM_MAX_PATH + 1];
+    Format(sOriginal, sizeof(sOriginal), "resource/csgo_%s.txt", language);
+
+    char sModified[PLATFORM_MAX_PATH + 1];
+    Format(sModified, sizeof(sModified), "resource/csgo_%s.txt.utf8", language);
+
+    File fiOriginal = OpenFile(sOriginal, "rb");
+    File fiModified = OpenFile(sModified, "wb");
+    
+    int iBytes;
+    int iBuffer[4096];
+    
+    fiOriginal.Read(iBuffer, 1, 2);
+    
+    int iByte = 0;
+    int iLasteByte = 0;
+    
+    while ((iBytes = fiOriginal.Read(iBuffer, sizeof(iBuffer), 2)) != 0)
+    {
+        for (int i = 0; i < iBytes; i++)
+        {
+            iByte = iBuffer[i];
+            if (iByte > 255)
+                iBuffer[i] = 32;
+            
+            if (iLasteByte == 92 && iByte == 34)
+            {
+                iBuffer[i-1] = 32;
+                iBuffer[i] = 39;
+            }
+            
+            iLasteByte = iBuffer[i];
+        }
+        fiModified.Write(iBuffer, iBytes, 1);
+    }
+    
+    delete fiOriginal;
+    delete fiModified;
+
+    profiler.Stop();
+    float fTime = profiler.Time;
+    delete profiler;
+
+    LogMessage("ConvertResourceFile took %f seconds.", fTime);
+}
