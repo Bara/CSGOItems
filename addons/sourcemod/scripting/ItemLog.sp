@@ -85,12 +85,27 @@ public void CSGOItems_OnItemsSynced()
 			continue;
 		}
 		
-		CSGOItems_GetWeaponDisplayNameByWeaponNum(i, szBuffer, sizeof(szBuffer));
+		bool bDisplay = CSGOItems_GetWeaponDisplayNameByWeaponNum(i, szBuffer, sizeof(szBuffer));
 		int iPrice = CSGOItems_GetWeaponPriceByWeaponNum(i);
+		int iDefIndex = CSGOItems_GetWeaponDefIndexByWeaponNum(i);
+		char sClassName[PLATFORM_MAX_PATH + 1];
+		bool bClassName = CSGOItems_GetWeaponClassNameByWeaponNum(i, sClassName, sizeof(sClassName));
+		char sViewModel[PLATFORM_MAX_PATH + 1];
+		bool bViewModel = CSGOItems_GetWeaponViewModelByWeaponNum(i, sViewModel, sizeof(sViewModel));
+		char sWorldModel[PLATFORM_MAX_PATH + 1];
+		bool bWorldModel = CSGOItems_GetWeaponWorldModelByWeaponNum(i, sWorldModel, sizeof(sWorldModel));
+		int iSlot = CSGOItems_GetWeaponSlotByWeaponNum(i);
+		int iTeam = CSGOItems_GetWeaponTeamByWeaponNum(i);
+		int iClipAmmo = CSGOItems_GetWeaponClipAmmoByWeaponNum(i);
+		int iReserveAmmo = CSGOItems_GetWeaponReserveAmmoByWeaponNum(i);
+		int iKillAward = CSGOItems_GetWeaponKillAwardByWeaponNum(i);
+		float fSpread = CSGOItems_GetWeaponSpreadByWeaponNum(i);
+		float fCycleTime = CSGOItems_GetWeaponCycleTimeByWeaponNum(i);
 		
 		BuildPath(Path_SM, szPath, sizeof(szPath), "logs/ItemLog/Weapons/%s.txt", szBuffer);
 
-		PrintToServer("Weapon: %s, Price: %d", szBuffer, iPrice);
+		PrintToServer("Displayname: %s (%d), Def Index: %d, Classname: %s (%d), View Model: %s (%d), World Model: %s (%d), Slot: %d, Team: %d, Clip Ammo: %d, Reserve Ammo: %d, KillAward: %d, Spread: %f, CycleTime: %f, Price: %d",
+		szBuffer, bDisplay, iDefIndex, sClassName, bClassName, sViewModel, bViewModel, sWorldModel, bWorldModel, iSlot, iTeam, iClipAmmo, iReserveAmmo, iKillAward, fSpread, fCycleTime, iPrice);
 		
 		for (int x = 0; x < alPaints.Length; x++) {
 			alPaints.GetString(x, szBuffer, sizeof(szBuffer)); ExplodeString(szBuffer, ";", szSplitBuffer, 128, 128);
